@@ -1,0 +1,378 @@
+@import "tailwindcss";
+
+:root {
+  --primary-accent: #14B8A6;
+  --secondary-accent: #0D9488;
+  --panel-title-color: #5EEAD4;
+  --card-bg: rgba(15, 23, 42, 0.85);
+  --card-border: rgba(51, 65, 85, 0.6);
+  --grand-total-bg: linear-gradient(135deg, #0D9488, #14B8A6);
+  --btn-primary-bg: #14B8A6;
+  --link-color: #2DD4BF;
+  --font-main: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+}
+
+/* 🌊 1. Smart Residence — Midnight + Teal (Default & Flagship) */
+[data-theme="midnight_teal"] {
+  --primary-accent: #14B8A6;
+  --secondary-accent: #0D9488;
+  --panel-title-color: #5EEAD4;
+  --card-bg: rgba(15, 23, 42, 0.88);
+  --card-border: rgba(51, 65, 85, 0.65);
+  --grand-total-bg: linear-gradient(135deg, #0F766E, #14B8A6);
+  --btn-primary-bg: #14B8A6;
+  --link-color: #2DD4BF;
+}
+
+/* ❄️ 2. Nordic Residence — Deep Navy + Sky Cyan */
+[data-theme="nordic_navy"] {
+  --primary-accent: #38BDF8;
+  --secondary-accent: #0284C7;
+  --panel-title-color: #7DD3FC;
+  --card-bg: rgba(11, 19, 43, 0.88);
+  --card-border: rgba(40, 58, 92, 0.65);
+  --grand-total-bg: linear-gradient(135deg, #0369A1, #38BDF8);
+  --btn-primary-bg: #0284C7;
+  --link-color: #38BDF8;
+}
+
+/* 🌲 3. Estate Emerald — Deep Spruce + Emerald */
+[data-theme="estate_emerald"] {
+  --primary-accent: #10B981;
+  --secondary-accent: #059669;
+  --panel-title-color: #6EE7B7;
+  --card-bg: rgba(2, 44, 34, 0.88);
+  --card-border: rgba(6, 78, 59, 0.65);
+  --grand-total-bg: linear-gradient(135deg, #047857, #10B981);
+  --btn-primary-bg: #059669;
+  --link-color: #34D399;
+}
+
+/* 🏢 4. Daylight Slate — Cool Slate & Teal */
+[data-theme="daylight_slate"] {
+  --primary-accent: #2DD4BF;
+  --secondary-accent: #0D9488;
+  --panel-title-color: #99F6E4;
+  --card-bg: rgba(15, 23, 42, 0.90);
+  --card-border: rgba(71, 85, 105, 0.60);
+  --grand-total-bg: linear-gradient(135deg, #0F766E, #2DD4BF);
+  --btn-primary-bg: #14B8A6;
+  --link-color: #2DD4BF;
+}
+
+@layer base {
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: var(--font-main);
+    color: #F8FAFC;
+    background-color: #0F172A;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+}
+
+/* Smart Residence Panels & Cards */
+.panel,
+.hub-panel {
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 20px;
+  border: 1px solid var(--card-border);
+  padding: 24px;
+  box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.5);
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+.header-title {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  margin-bottom: 20px;
+  text-align: center;
+  color: #FFFFFF;
+}
+
+.status-box {
+  border-radius: 16px;
+  padding: 16px 36px;
+  margin-bottom: 24px;
+  text-align: center;
+  border-width: 1px;
+}
+
+.status-box-unpaid {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.12);
+}
+
+.status-box-paid {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.4);
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.12);
+}
+
+.status-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #94A3B8;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.status-value-unpaid {
+  font-size: 24px;
+  font-weight: 900;
+  color: #F87171;
+  letter-spacing: 0.5px;
+}
+
+.status-value-paid {
+  font-size: 24px;
+  font-weight: 900;
+  color: #34D399;
+  letter-spacing: 0.5px;
+}
+
+/* Modern Status Badges */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-width: 1px;
+  white-space: nowrap;
+}
+
+.status-badge-paid {
+  background-color: rgba(16, 185, 129, 0.18);
+  color: #34D399;
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.status-badge-not-paid {
+  background-color: rgba(239, 68, 68, 0.18);
+  color: #F87171;
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.status-badge-pending {
+  background-color: rgba(245, 158, 11, 0.18);
+  color: #FBBF24;
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.status-badge-progress {
+  background-color: rgba(14, 165, 233, 0.18);
+  color: #38BDF8;
+  border-color: rgba(14, 165, 233, 0.35);
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+  width: 100%;
+  flex-grow: 1;
+  margin-bottom: 20px;
+}
+
+@media (min-width: 768px) {
+  .details-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.panel-title {
+  font-size: 15px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.75px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+  padding-bottom: 8px;
+  color: var(--panel-title-color);
+  transition: color 0.3s ease;
+}
+
+.data-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.4);
+  font-size: 13.5px;
+}
+
+.data-label {
+  color: #94A3B8;
+  font-weight: 500;
+}
+
+.data-value {
+  font-weight: 600;
+  color: #F8FAFC;
+}
+
+.grand-total-box {
+  background: var(--grand-total-bg);
+  border-radius: 16px;
+  padding: 16px 40px;
+  text-align: center;
+  box-shadow: 0 8px 24px -4px rgba(20, 184, 166, 0.35);
+  margin-top: auto;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: background 0.3s ease;
+}
+
+.grand-total-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+}
+
+.grand-total-value {
+  font-size: 30px;
+  font-weight: 900;
+  color: #FFFFFF;
+}
+
+.back-btn {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(51, 65, 85, 0.8);
+  padding: 8px 20px;
+  border-radius: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: #E2E8F0;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.back-btn:hover {
+  background: rgba(51, 65, 85, 0.8);
+  border-color: rgba(148, 163, 184, 0.6);
+  color: #FFFFFF;
+}
+
+.upi-link {
+  margin-top: 10px;
+  color: var(--link-color);
+  font-size: 12px;
+  font-style: italic;
+  text-align: center;
+}
+
+/* Tenant Hub standard button styles */
+.hub-btn {
+  background: rgba(30, 41, 59, 0.9);
+  color: #F8FAFC;
+  font-weight: 600;
+  border-radius: 14px;
+  padding: 10px 22px;
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease-in-out;
+  border: 1px solid rgba(51, 65, 85, 0.8);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hub-btn:hover {
+  background: rgba(51, 65, 85, 0.9);
+  border-color: var(--primary-accent);
+  color: #FFFFFF;
+  transform: translateY(-1px);
+}
+
+.hub-btn:active {
+  transform: translateY(0);
+}
+
+.hub-btn-primary {
+  background: #14B8A6;
+  color: #0F172A;
+  font-weight: 800;
+  border-color: #2DD4BF;
+}
+
+.hub-btn-primary:hover {
+  background: #2DD4BF;
+  color: #0F172A;
+}
+
+.hub-btn-danger {
+  background: rgba(220, 38, 38, 0.25);
+  color: #F87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.hub-btn-danger:hover {
+  background: rgba(220, 38, 38, 0.4);
+}
+
+.hub-btn-success {
+  background: rgba(16, 185, 129, 0.25);
+  color: #34D399;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.hub-btn-success:hover {
+  background: rgba(16, 185, 129, 0.4);
+}
+
+.hub-input {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(51, 65, 85, 0.8);
+  color: #F8FAFC;
+  border-radius: 12px;
+  padding: 8px 14px;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.hub-input:focus {
+  border-color: #14B8A6;
+  box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.25);
+  background: rgba(15, 23, 42, 0.95);
+}
+
+.hub-input option {
+  background-color: #0F172A;
+  color: #F8FAFC;
+}
+
+/* Precision scrollbars */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.7);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(51, 65, 85, 0.8);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(20, 184, 166, 0.6);
+}

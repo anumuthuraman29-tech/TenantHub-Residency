@@ -1,0 +1,8 @@
+{
+  "name": "Tenant Hub",
+  "description": "Tenant Hub Residency - Modern residential tenant management platform with Midnight + Teal dashboard, payment tracking, rent and water billing, maintenance requests, and notices.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
