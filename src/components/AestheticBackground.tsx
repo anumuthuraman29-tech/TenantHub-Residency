@@ -17,6 +17,7 @@ interface ResidenceThemeConfig {
   orb2: { color: string; r: number };
   orb3: { color: string; r: number };
   primaryColor: string;
+  primaryRgb: string;
   accentGlow: string;
 }
 
@@ -28,33 +29,37 @@ const THEME_CONFIGS: Record<BackgroundTheme, ResidenceThemeConfig> = {
     orb2: { color: 'rgba(13, 148, 136, 0.14)', r: 380 },
     orb3: { color: 'rgba(56, 189, 248, 0.10)', r: 400 },
     primaryColor: '#14B8A6',
+    primaryRgb: '20, 184, 166',
     accentGlow: 'rgba(20, 184, 166, 0.45)',
   },
   nordic_navy: {
     bgGradient: 'from-[#0B132B] via-[#1C2541] to-[#090E1F]',
-    radialGradient: 'radial-gradient(ellipse 80% 55% at 50% -10%, rgba(56, 189, 248, 0.20), transparent)',
-    orb1: { color: 'rgba(56, 189, 248, 0.15)', r: 440 },
-    orb2: { color: 'rgba(99, 102, 241, 0.12)', r: 360 },
-    orb3: { color: 'rgba(14, 165, 233, 0.12)', r: 390 },
+    radialGradient: 'radial-gradient(ellipse 80% 55% at 50% -10%, rgba(56, 189, 248, 0.25), transparent)',
+    orb1: { color: 'rgba(56, 189, 248, 0.18)', r: 440 },
+    orb2: { color: 'rgba(99, 102, 241, 0.14)', r: 360 },
+    orb3: { color: 'rgba(14, 165, 233, 0.14)', r: 390 },
     primaryColor: '#38BDF8',
+    primaryRgb: '56, 189, 248',
     accentGlow: 'rgba(56, 189, 248, 0.45)',
   },
   estate_emerald: {
     bgGradient: 'from-[#022C22] via-[#064E3B] to-[#0A1F18]',
-    radialGradient: 'radial-gradient(ellipse 80% 55% at 50% -10%, rgba(16, 185, 129, 0.22), transparent)',
-    orb1: { color: 'rgba(16, 185, 129, 0.16)', r: 430 },
-    orb2: { color: 'rgba(5, 150, 105, 0.14)', r: 370 },
-    orb3: { color: 'rgba(52, 211, 153, 0.10)', r: 390 },
+    radialGradient: 'radial-gradient(ellipse 80% 55% at 50% -10%, rgba(16, 185, 129, 0.25), transparent)',
+    orb1: { color: 'rgba(16, 185, 129, 0.18)', r: 430 },
+    orb2: { color: 'rgba(5, 150, 105, 0.15)', r: 370 },
+    orb3: { color: 'rgba(52, 211, 153, 0.12)', r: 390 },
     primaryColor: '#10B981',
+    primaryRgb: '16, 185, 129',
     accentGlow: 'rgba(16, 185, 129, 0.45)',
   },
   daylight_slate: {
     bgGradient: 'from-[#0F172A] via-[#1E293B] to-[#0B1220]',
-    radialGradient: 'radial-gradient(ellipse 80% 55% at 50% -10%, rgba(45, 212, 191, 0.18), transparent)',
-    orb1: { color: 'rgba(45, 212, 191, 0.14)', r: 420 },
-    orb2: { color: 'rgba(148, 163, 184, 0.10)', r: 350 },
-    orb3: { color: 'rgba(20, 184, 166, 0.12)', r: 380 },
+    radialGradient: 'radial-gradient(ellipse 80% 55% at 50% -10%, rgba(45, 212, 191, 0.22), transparent)',
+    orb1: { color: 'rgba(45, 212, 191, 0.16)', r: 420 },
+    orb2: { color: 'rgba(148, 163, 184, 0.12)', r: 350 },
+    orb3: { color: 'rgba(20, 184, 166, 0.14)', r: 380 },
     primaryColor: '#2DD4BF',
+    primaryRgb: '45, 212, 191',
     accentGlow: 'rgba(45, 212, 191, 0.40)',
   },
 };
@@ -127,7 +132,7 @@ export const AestheticBackground: React.FC<AestheticBackgroundProps> = ({
         if (node.y < 0) node.y = height;
         if (node.y > height) node.y = 0;
 
-        ctx.fillStyle = `rgba(20, 184, 166, ${node.alpha})`;
+        ctx.fillStyle = `rgba(${cfg.primaryRgb}, ${node.alpha})`;
         ctx.beginPath();
         ctx.arc(node.x, node.y, node.size, 0, Math.PI * 2);
         ctx.fill();
@@ -139,7 +144,7 @@ export const AestheticBackground: React.FC<AestheticBackgroundProps> = ({
           const dy = node.y - other.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
           if (dist < 140) {
-            ctx.strokeStyle = `rgba(20, 184, 166, ${(1 - dist / 140) * 0.12})`;
+            ctx.strokeStyle = `rgba(${cfg.primaryRgb}, ${(1 - dist / 140) * 0.14})`;
             ctx.lineWidth = 0.75;
             ctx.beginPath();
             ctx.moveTo(node.x, node.y);
@@ -175,9 +180,9 @@ export const AestheticBackground: React.FC<AestheticBackgroundProps> = ({
 
       {/* Subtle Precision Architectural Grid Pattern */}
       <div
-        className="absolute inset-0 opacity-[0.035] pointer-events-none"
+        className="absolute inset-0 opacity-[0.04] pointer-events-none transition-opacity duration-700"
         style={{
-          backgroundImage: `linear-gradient(to right, #14B8A6 1px, transparent 1px), linear-gradient(to bottom, #14B8A6 1px, transparent 1px)`,
+          backgroundImage: `linear-gradient(to right, ${cfg.primaryColor} 1px, transparent 1px), linear-gradient(to bottom, ${cfg.primaryColor} 1px, transparent 1px)`,
           backgroundSize: '48px 48px',
         }}
       />

@@ -257,15 +257,15 @@ export const InfoEditDisplay: React.FC<InfoEditDisplayProps> = ({
         </div>
 
         {/* Buttons corresponding to ASP.NET btnAdd, btnUpdate, btnDelete, btnClear, btnBack */}
-        <div className="flex flex-wrap gap-2.5 justify-center pt-2">
-          <button type="submit" id="btnAdd" className="hub-btn px-5 py-2 text-xs font-bold">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 pt-3 border-t border-white/10">
+          <button type="submit" id="btnAdd" className="hub-btn min-h-[40px] px-4 py-2 text-xs font-bold flex items-center justify-center cursor-pointer">
             Add Record
           </button>
           <button
             type="button"
             id="btnUpdate"
             onClick={handleUpdate}
-            className="hub-btn px-5 py-2 text-xs font-bold"
+            className="hub-btn min-h-[40px] px-4 py-2 text-xs font-bold flex items-center justify-center cursor-pointer"
           >
             Update Record
           </button>
@@ -273,7 +273,7 @@ export const InfoEditDisplay: React.FC<InfoEditDisplayProps> = ({
             type="button"
             id="btnDelete"
             onClick={handleDelete}
-            className="hub-btn hub-btn-danger px-5 py-2 text-xs font-bold"
+            className="hub-btn hub-btn-danger min-h-[40px] px-4 py-2 text-xs font-bold flex items-center justify-center cursor-pointer"
           >
             Delete Record
           </button>
@@ -281,7 +281,7 @@ export const InfoEditDisplay: React.FC<InfoEditDisplayProps> = ({
             type="button"
             id="btnClear"
             onClick={clearForm}
-            className="hub-btn px-5 py-2 text-xs font-bold"
+            className="hub-btn min-h-[40px] px-4 py-2 text-xs font-bold flex items-center justify-center border border-white/20 bg-white/10 hover:bg-white/20 text-white cursor-pointer"
           >
             Clear Form
           </button>
@@ -289,9 +289,9 @@ export const InfoEditDisplay: React.FC<InfoEditDisplayProps> = ({
             type="button"
             id="btnBack"
             onClick={() => onNavigate('infoallpage')}
-            className="hub-btn px-5 py-2 text-xs font-bold"
+            className="hub-btn hub-btn-primary min-h-[40px] px-4 py-2 text-xs font-bold col-span-2 sm:col-span-1 flex items-center justify-center cursor-pointer"
           >
-            Back to Info Directory
+            Back to Directory
           </button>
         </div>
       </form>

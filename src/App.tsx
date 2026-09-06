@@ -33,6 +33,7 @@ import { InfoPageDisplay, PasswordAllPageDisplay } from './components/pages/Othe
 
 import { Building2 } from 'lucide-react';
 import { initializeSupabaseRealtime } from './services/supabaseRealtime';
+import tenantHubLogo from './assets/images/tenant_hub_logo.png';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<string>('login');
@@ -51,7 +52,25 @@ export default function App() {
   const handleThemeChange = (newTheme: BackgroundTheme) => {
     setBgTheme(newTheme);
     localStorage.setItem('TENANT_HUB_THEME', newTheme);
+    document.documentElement.setAttribute('data-theme', newTheme);
+    document.body.setAttribute('data-theme', newTheme);
   };
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', bgTheme);
+    document.body.setAttribute('data-theme', bgTheme);
+  }, [bgTheme]);
+
+  useEffect(() => {
+    const handleGlobalThemeChange = (e: Event) => {
+      const customEvent = e as CustomEvent<BackgroundTheme>;
+      if (customEvent.detail && customEvent.detail !== bgTheme) {
+        setBgTheme(customEvent.detail);
+      }
+    };
+    window.addEventListener('tenant_hub_theme_change', handleGlobalThemeChange);
+    return () => window.removeEventListener('tenant_hub_theme_change', handleGlobalThemeChange);
+  }, [bgTheme]);
 
   useEffect(() => {
     DatabaseService.syncFromSupabase();
@@ -83,11 +102,16 @@ export default function App() {
       <AestheticBackground theme={bgTheme} />
 
       {/* Modern Midnight + Teal Header Bar */}
-      <header className="relative z-20 bg-[#0F172A]/85 border-b border-slate-800/80 px-4 sm:px-6 py-2.5 backdrop-blur-xl shadow-lg">
+      <header className="sticky top-0 z-50 bg-[#0F172A]/90 border-b border-slate-800/80 px-4 sm:px-6 py-2.5 backdrop-blur-xl shadow-lg transition-colors">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-400">
-              <Building2 className="w-4 h-4 text-teal-400" />
+            <div className="w-9 h-9 rounded-xl overflow-hidden bg-slate-900/90 border border-teal-500/40 p-0.5 shadow-sm flex items-center justify-center shrink-0">
+              <img
+                src={tenantHubLogo}
+                alt="Tenant Hub Residency Logo"
+                className="w-full h-full object-contain rounded-lg"
+                referrerPolicy="no-referrer"
+              />
             </div>
             <div>
               <div className="font-extrabold tracking-wider text-xs sm:text-sm text-white uppercase flex items-center gap-2">

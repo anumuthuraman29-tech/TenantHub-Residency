@@ -483,19 +483,19 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
   }
 
   return (
-    <div className="relative z-10 w-full max-w-6xl mx-auto my-6 p-4 sm:p-6 lg:p-8 hub-panel">
+    <div className="relative z-10 w-full max-w-7xl mx-auto my-4 sm:my-6 p-3.5 sm:p-6 lg:p-8 hub-panel">
       {/* Main Container Content */}
       <div>
-        {/* Header Bar: Top-Left WATER EDIT Heading, Top-Right Back Button */}
-        <div className="flex items-center justify-between gap-4 mb-6">
-          <div>
+        {/* Header Bar: Top-Left WATER EDIT Heading, Top-Right Action Buttons */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div className="min-w-0">
             <h1
               id="water-edit-heading"
               className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-wider uppercase text-white drop-shadow-md"
             >
               WATER EDIT
             </h1>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               <span className="text-xs text-white/80 font-semibold uppercase tracking-wide">
                 Active Table:
               </span>
@@ -505,19 +505,19 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0 self-stretch sm:self-auto justify-end">
             <button
               id="btnSyncSupabase"
               type="button"
               onClick={handleSyncSupabase}
               disabled={isSyncingSupabase}
-              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-600/25 hover:bg-emerald-600/40 border border-emerald-400/40 text-emerald-200 text-xs font-bold transition-all shadow-md active:scale-95 disabled:opacity-50 cursor-pointer"
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-400/40 text-emerald-100 text-xs sm:text-sm font-bold transition-all shadow-md active:scale-95 disabled:opacity-50 cursor-pointer min-h-[42px] whitespace-nowrap"
               title="Sync all local records directly to Supabase cloud database"
             >
               {isSyncingSupabase ? (
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
               ) : (
-                <Cloud className="w-3.5 h-3.5 text-emerald-300" />
+                <Cloud className="w-4 h-4 text-emerald-300 shrink-0" />
               )}
               <span>{isSyncingSupabase ? 'Syncing...' : 'Sync Supabase'}</span>
             </button>
@@ -526,7 +526,7 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
               id="btnBack"
               type="button"
               onClick={() => onNavigate('waterallpage')}
-              className="hub-btn hub-btn-primary px-6 py-2.5 font-semibold text-sm text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
+              className="flex-1 sm:flex-none inline-flex items-center justify-center px-6 py-2.5 font-semibold text-xs sm:text-sm text-white hub-btn hub-btn-primary shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer min-h-[42px] whitespace-nowrap"
             >
               Back
             </button>
@@ -534,12 +534,12 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
         </div>
 
         {/* Table Selector Pills */}
-        <div className="bg-white/5 border border-white/15 rounded-2xl p-3 mb-6 backdrop-blur-md shadow-md">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <span className="text-xs font-bold text-white/80 uppercase tracking-wider px-2">
+        <div className="bg-white/5 border border-white/15 rounded-2xl p-3 sm:p-4 mb-6 backdrop-blur-md shadow-md">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <span className="text-xs font-bold text-white/80 uppercase tracking-wider px-1 shrink-0">
               Select Water Table:
             </span>
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="grid grid-cols-2 sm:grid-cols-4 md:flex md:flex-wrap items-center gap-2 w-full md:w-auto">
               {ALLOWED_TABLES.map((tName) => {
                 const isActive = activeTable === tName;
                 const unitNum = tName.replace('Water_', '');
@@ -548,13 +548,14 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
                     key={tName}
                     type="button"
                     onClick={() => setActiveTable(tName)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-150 ${
+                    className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-bold transition-all duration-150 text-center flex items-center justify-center gap-1 cursor-pointer ${
                       isActive
-                        ? 'hub-btn-primary text-white border border-white/40 shadow-md scale-105'
+                        ? 'hub-btn-primary text-white border border-white/40 shadow-md scale-102'
                         : 'bg-white/10 text-white/80 hover:bg-white/20 border border-white/10'
                     }`}
                   >
-                    Unit {unitNum} <span className="text-[10px] opacity-75 font-mono">({tName})</span>
+                    <span>Unit {unitNum}</span>
+                    <span className="text-[10px] opacity-75 font-mono">({tName})</span>
                   </button>
                 );
               })}
@@ -755,33 +756,36 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
               <div className="flex flex-col">
                 <label
                   htmlFor="txtPaid"
-                  className="text-xs font-semibold text-white/90 mb-1.5 uppercase tracking-wider"
+                  className="text-xs font-semibold text-white/90 mb-1.5 uppercase tracking-wider flex items-center justify-between"
                 >
-                  9. Paid Status
+                  <span>9. Paid Status</span>
+                  <span className="text-[10px] text-white/60 font-normal">Select / Type</span>
                 </label>
-                <div className="flex items-center gap-2 w-full">
+                <div className="flex items-center gap-1.5 w-full">
                   <input
                     id="txtPaid"
                     type="text"
                     placeholder="PAID / NOT PAID"
                     value={paid}
                     onChange={(e) => setPaid(e.target.value.toUpperCase())}
-                    className="flex-1 min-w-0 h-11 hub-input font-bold uppercase tracking-wider text-xs sm:text-sm"
+                    className="flex-1 min-w-0 h-11 hub-input font-bold uppercase tracking-wider text-xs px-2 text-center"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setPaid('PAID')}
-                    className="h-11 px-3 sm:px-4 text-xs font-bold rounded-xl border border-emerald-400 bg-emerald-600 hover:bg-emerald-500 text-white shadow-md transition-all whitespace-nowrap shrink-0 flex items-center justify-center"
-                  >
-                    PAID
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPaid('NOT PAID')}
-                    className="h-11 px-3 sm:px-4 text-xs font-bold rounded-xl border border-rose-400 bg-rose-600 hover:bg-rose-500 text-white shadow-md transition-all whitespace-nowrap shrink-0 flex items-center justify-center"
-                  >
-                    NOT PAID
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setPaid('PAID')}
+                      className="h-11 px-2.5 text-xs font-black rounded-xl border border-emerald-400 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white shadow-md transition-all whitespace-nowrap flex items-center justify-center cursor-pointer"
+                    >
+                      PAID
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaid('NOT PAID')}
+                      className="h-11 px-2 text-[10px] font-black rounded-xl border border-rose-400 bg-rose-600 hover:bg-rose-500 active:scale-95 text-white shadow-md transition-all whitespace-nowrap flex items-center justify-center cursor-pointer"
+                    >
+                      NOT PAID
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -800,49 +804,47 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
                   value={total}
                   readOnly
                   tabIndex={-1}
-                  className="w-full hub-input opacity-90 text-emerald-300 cursor-not-allowed font-mono font-black"
+                  className="w-full h-11 hub-input opacity-90 text-emerald-300 cursor-not-allowed font-mono font-black"
                 />
               </div>
             </div>
 
             {/* Form Action Buttons: Add, Update, Delete, Clear */}
-            <div className="pt-3 space-y-3">
-              <div className="grid grid-cols-2 gap-3 w-full">
+            <div className="pt-4 border-t border-white/10 mt-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full">
                 <button
                   id="btnAdd"
                   type="submit"
-                  className="w-full hub-btn hub-btn-primary py-3 text-xs sm:text-sm font-bold uppercase tracking-wider flex items-center justify-center"
+                  className="w-full hub-btn hub-btn-primary min-h-[44px] py-2.5 px-4 text-xs sm:text-sm font-bold uppercase tracking-wider flex items-center justify-center shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer"
                 >
-                  ADD
+                  ADD RECORD
                 </button>
 
                 <button
                   id="btnUpdate"
                   type="button"
                   onClick={handleUpdate}
-                  className="w-full hub-btn hub-btn-primary py-3 text-xs sm:text-sm font-bold uppercase tracking-wider flex items-center justify-center"
+                  className="w-full hub-btn hub-btn-primary min-h-[44px] py-2.5 px-4 text-xs sm:text-sm font-bold uppercase tracking-wider flex items-center justify-center shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer"
                 >
                   UPDATE
                 </button>
-              </div>
 
-              <div className="grid grid-cols-2 gap-3 w-full">
                 <button
                   id="btnDelete"
                   type="button"
                   onClick={handleDelete}
-                  className="w-full hub-btn hub-btn-danger py-2.5 text-xs sm:text-sm font-bold uppercase tracking-wider flex items-center justify-center"
+                  className="w-full hub-btn hub-btn-danger min-h-[44px] py-2.5 px-4 text-xs sm:text-sm font-bold uppercase tracking-wider flex items-center justify-center shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer"
                 >
-                  Delete
+                  DELETE
                 </button>
 
                 <button
                   id="btnClear"
                   type="button"
                   onClick={handleClear}
-                  className="w-full hub-btn py-2.5 text-xs sm:text-sm font-bold uppercase tracking-wider flex items-center justify-center"
+                  className="w-full hub-btn min-h-[44px] py-2.5 px-4 text-xs sm:text-sm font-bold uppercase tracking-wider flex items-center justify-center border border-white/20 bg-white/10 hover:bg-white/20 text-white shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer"
                 >
-                  Clear
+                  CLEAR FORM
                 </button>
               </div>
             </div>
@@ -851,7 +853,7 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
 
         {/* Water Record Table (GridView equivalent) */}
         <div className="bg-white/5 border border-white/15 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-md">
-          <div className="px-5 py-3.5 bg-white/10 border-b border-white/15 flex items-center justify-between flex-wrap gap-2">
+          <div className="px-4 sm:px-5 py-3.5 bg-white/10 border-b border-white/15 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <h3 className="text-sm font-bold uppercase tracking-wider text-white">
               Water Meter Records & Billing — Table [{activeTable}]
             </h3>

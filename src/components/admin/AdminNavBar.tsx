@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import { DatabaseService } from '../../services/dbStore';
+import { ThemePalette } from '../ThemePalette';
 
 interface AdminNavBarProps {
   currentPage: string;
@@ -150,11 +151,12 @@ export const AdminNavBar: React.FC<AdminNavBarProps> = ({
             })}
           </nav>
 
-          {/* Desktop Right Logout */}
+          {/* Desktop Right Logout & Theme */}
           <div className="hidden xl:flex items-center gap-2">
+            <ThemePalette />
             <button
               onClick={onLogout}
-              className="px-3 py-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-300 hover:text-red-200 text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+              className="px-3 py-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-300 hover:text-red-200 text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
               title="End Admin Session"
             >
               <LogOut className="w-3.5 h-3.5" />
@@ -220,11 +222,14 @@ export const AdminNavBar: React.FC<AdminNavBarProps> = ({
             })}
           </div>
 
-          <div className="pt-2 border-t border-slate-800 flex justify-between items-center">
-            <span className="text-[11px] text-slate-400">Logged in as Administrator</span>
+          <div className="pt-2 border-t border-slate-800 flex justify-between items-center gap-2">
+            <div className="flex items-center gap-2">
+              <ThemePalette />
+              <span className="text-[11px] text-slate-400 hidden sm:inline">Admin</span>
+            </div>
             <button
               onClick={onLogout}
-              className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-300 text-xs font-bold border border-red-500/40 flex items-center gap-1.5"
+              className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-300 text-xs font-bold border border-red-500/40 flex items-center gap-1.5 cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5" />
               <span>Logout</span>

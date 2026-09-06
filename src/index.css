@@ -1,63 +1,88 @@
 @import "tailwindcss";
 
-:root {
-  --primary-accent: #14B8A6;
-  --secondary-accent: #0D9488;
-  --panel-title-color: #5EEAD4;
-  --card-bg: rgba(15, 23, 42, 0.85);
-  --card-border: rgba(51, 65, 85, 0.6);
-  --grand-total-bg: linear-gradient(135deg, #0D9488, #14B8A6);
-  --btn-primary-bg: #14B8A6;
-  --link-color: #2DD4BF;
-  --font-main: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-}
-
-/* 🌊 1. Smart Residence — Midnight + Teal (Default & Flagship) */
+:root,
 [data-theme="midnight_teal"] {
   --primary-accent: #14B8A6;
+  --primary-accent-rgb: 20, 184, 166;
   --secondary-accent: #0D9488;
+  --secondary-accent-rgb: 13, 148, 136;
   --panel-title-color: #5EEAD4;
   --card-bg: rgba(15, 23, 42, 0.88);
   --card-border: rgba(51, 65, 85, 0.65);
   --grand-total-bg: linear-gradient(135deg, #0F766E, #14B8A6);
   --btn-primary-bg: #14B8A6;
+  --btn-primary-hover: #2DD4BF;
+  --btn-primary-text: #0F172A;
   --link-color: #2DD4BF;
+  --badge-bg: rgba(20, 184, 166, 0.18);
+  --badge-border: rgba(20, 184, 166, 0.35);
+  --badge-text: #5EEAD4;
+  --header-bg: rgba(15, 23, 42, 0.88);
+  --header-border: rgba(51, 65, 85, 0.8);
+  --font-main: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
 }
 
 /* ❄️ 2. Nordic Residence — Deep Navy + Sky Cyan */
 [data-theme="nordic_navy"] {
   --primary-accent: #38BDF8;
+  --primary-accent-rgb: 56, 189, 248;
   --secondary-accent: #0284C7;
+  --secondary-accent-rgb: 2, 132, 199;
   --panel-title-color: #7DD3FC;
-  --card-bg: rgba(11, 19, 43, 0.88);
-  --card-border: rgba(40, 58, 92, 0.65);
+  --card-bg: rgba(11, 19, 43, 0.90);
+  --card-border: rgba(40, 58, 92, 0.70);
   --grand-total-bg: linear-gradient(135deg, #0369A1, #38BDF8);
   --btn-primary-bg: #0284C7;
+  --btn-primary-hover: #38BDF8;
+  --btn-primary-text: #FFFFFF;
   --link-color: #38BDF8;
+  --badge-bg: rgba(56, 189, 248, 0.18);
+  --badge-border: rgba(56, 189, 248, 0.4);
+  --badge-text: #7DD3FC;
+  --header-bg: rgba(11, 19, 43, 0.90);
+  --header-border: rgba(40, 58, 92, 0.85);
 }
 
 /* 🌲 3. Estate Emerald — Deep Spruce + Emerald */
 [data-theme="estate_emerald"] {
   --primary-accent: #10B981;
+  --primary-accent-rgb: 16, 185, 129;
   --secondary-accent: #059669;
+  --secondary-accent-rgb: 5, 150, 105;
   --panel-title-color: #6EE7B7;
-  --card-bg: rgba(2, 44, 34, 0.88);
-  --card-border: rgba(6, 78, 59, 0.65);
+  --card-bg: rgba(2, 44, 34, 0.90);
+  --card-border: rgba(6, 78, 59, 0.70);
   --grand-total-bg: linear-gradient(135deg, #047857, #10B981);
   --btn-primary-bg: #059669;
+  --btn-primary-hover: #10B981;
+  --btn-primary-text: #FFFFFF;
   --link-color: #34D399;
+  --badge-bg: rgba(16, 185, 129, 0.18);
+  --badge-border: rgba(16, 185, 129, 0.4);
+  --badge-text: #6EE7B7;
+  --header-bg: rgba(2, 44, 34, 0.90);
+  --header-border: rgba(6, 78, 59, 0.85);
 }
 
 /* 🏢 4. Daylight Slate — Cool Slate & Teal */
 [data-theme="daylight_slate"] {
   --primary-accent: #2DD4BF;
+  --primary-accent-rgb: 45, 212, 191;
   --secondary-accent: #0D9488;
+  --secondary-accent-rgb: 13, 148, 136;
   --panel-title-color: #99F6E4;
-  --card-bg: rgba(15, 23, 42, 0.90);
-  --card-border: rgba(71, 85, 105, 0.60);
+  --card-bg: rgba(15, 23, 42, 0.92);
+  --card-border: rgba(71, 85, 105, 0.65);
   --grand-total-bg: linear-gradient(135deg, #0F766E, #2DD4BF);
-  --btn-primary-bg: #14B8A6;
+  --btn-primary-bg: #0D9488;
+  --btn-primary-hover: #2DD4BF;
+  --btn-primary-text: #FFFFFF;
   --link-color: #2DD4BF;
+  --badge-bg: rgba(45, 212, 191, 0.18);
+  --badge-border: rgba(45, 212, 191, 0.4);
+  --badge-text: #99F6E4;
+  --header-bg: rgba(15, 23, 42, 0.92);
+  --header-border: rgba(71, 85, 105, 0.8);
 }
 
 @layer base {
@@ -306,15 +331,18 @@
 }
 
 .hub-btn-primary {
-  background: #14B8A6;
-  color: #0F172A;
+  background: var(--btn-primary-bg, #14B8A6);
+  color: var(--btn-primary-text, #0F172A);
   font-weight: 800;
-  border-color: #2DD4BF;
+  border: 1px solid var(--primary-accent, #2DD4BF);
+  box-shadow: 0 4px 14px -2px rgba(var(--primary-accent-rgb, 20, 184, 166), 0.4);
 }
 
 .hub-btn-primary:hover {
-  background: #2DD4BF;
-  color: #0F172A;
+  background: var(--btn-primary-hover, #2DD4BF);
+  color: var(--btn-primary-text, #0F172A);
+  border-color: var(--btn-primary-hover, #2DD4BF);
+  box-shadow: 0 6px 20px -2px rgba(var(--primary-accent-rgb, 20, 184, 166), 0.6);
 }
 
 .hub-btn-danger {
@@ -348,14 +376,129 @@
 }
 
 .hub-input:focus {
-  border-color: #14B8A6;
-  box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.25);
+  border-color: var(--primary-accent, #14B8A6);
+  box-shadow: 0 0 0 2px rgba(var(--primary-accent-rgb, 20, 184, 166), 0.25);
   background: rgba(15, 23, 42, 0.95);
 }
 
 .hub-input option {
   background-color: #0F172A;
   color: #F8FAFC;
+}
+
+/* Dynamic Theme Accent Adapters across all pages */
+[data-theme="nordic_navy"] .text-teal-400,
+[data-theme="nordic_navy"] .text-teal-300,
+[data-theme="nordic_navy"] .text-teal-500 {
+  color: var(--primary-accent) !important;
+}
+
+[data-theme="estate_emerald"] .text-teal-400,
+[data-theme="estate_emerald"] .text-teal-300,
+[data-theme="estate_emerald"] .text-teal-500 {
+  color: var(--primary-accent) !important;
+}
+
+[data-theme="daylight_slate"] .text-teal-400,
+[data-theme="daylight_slate"] .text-teal-300,
+[data-theme="daylight_slate"] .text-teal-500 {
+  color: var(--primary-accent) !important;
+}
+
+/* Theme-adaptive badges & container backgrounds */
+[data-theme="nordic_navy"] .bg-teal-500\/15,
+[data-theme="nordic_navy"] .bg-teal-500\/20,
+[data-theme="nordic_navy"] .bg-teal-500\/10,
+[data-theme="nordic_navy"] .bg-teal-500\/30 {
+  background-color: var(--badge-bg) !important;
+}
+
+[data-theme="estate_emerald"] .bg-teal-500\/15,
+[data-theme="estate_emerald"] .bg-teal-500\/20,
+[data-theme="estate_emerald"] .bg-teal-500\/10,
+[data-theme="estate_emerald"] .bg-teal-500\/30 {
+  background-color: var(--badge-bg) !important;
+}
+
+[data-theme="daylight_slate"] .bg-teal-500\/15,
+[data-theme="daylight_slate"] .bg-teal-500\/20,
+[data-theme="daylight_slate"] .bg-teal-500\/10,
+[data-theme="daylight_slate"] .bg-teal-500\/30 {
+  background-color: var(--badge-bg) !important;
+}
+
+/* Theme-adaptive borders */
+[data-theme="nordic_navy"] .border-teal-500\/30,
+[data-theme="nordic_navy"] .border-teal-500\/40,
+[data-theme="nordic_navy"] .border-teal-500\/20,
+[data-theme="nordic_navy"] .border-teal-500\/50 {
+  border-color: var(--badge-border) !important;
+}
+
+[data-theme="estate_emerald"] .border-teal-500\/30,
+[data-theme="estate_emerald"] .border-teal-500\/40,
+[data-theme="estate_emerald"] .border-teal-500\/20,
+[data-theme="estate_emerald"] .border-teal-500\/50 {
+  border-color: var(--badge-border) !important;
+}
+
+[data-theme="daylight_slate"] .border-teal-500\/30,
+[data-theme="daylight_slate"] .border-teal-500\/40,
+[data-theme="daylight_slate"] .border-teal-500\/20,
+[data-theme="daylight_slate"] .border-teal-500\/50 {
+  border-color: var(--badge-border) !important;
+}
+
+/* Theme-adaptive Admin Bar cyan accents */
+[data-theme="estate_emerald"] .text-cyan-400,
+[data-theme="estate_emerald"] .text-cyan-300 {
+  color: var(--primary-accent) !important;
+}
+
+[data-theme="estate_emerald"] .bg-cyan-500\/20,
+[data-theme="estate_emerald"] .bg-cyan-500\/15,
+[data-theme="estate_emerald"] .bg-cyan-500\/10 {
+  background-color: var(--badge-bg) !important;
+}
+
+[data-theme="estate_emerald"] .border-cyan-500\/50,
+[data-theme="estate_emerald"] .border-cyan-500\/40,
+[data-theme="estate_emerald"] .border-cyan-500\/20 {
+  border-color: var(--badge-border) !important;
+}
+
+[data-theme="midnight_teal"] .text-cyan-400,
+[data-theme="midnight_teal"] .text-cyan-300 {
+  color: var(--primary-accent) !important;
+}
+
+[data-theme="midnight_teal"] .bg-cyan-500\/20,
+[data-theme="midnight_teal"] .bg-cyan-500\/15,
+[data-theme="midnight_teal"] .bg-cyan-500\/10 {
+  background-color: var(--badge-bg) !important;
+}
+
+[data-theme="midnight_teal"] .border-cyan-500\/50,
+[data-theme="midnight_teal"] .border-cyan-500\/40,
+[data-theme="midnight_teal"] .border-cyan-500\/20 {
+  border-color: var(--badge-border) !important;
+}
+
+[data-theme="daylight_slate"] .text-cyan-400,
+[data-theme="daylight_slate"] .text-cyan-300 {
+  color: var(--primary-accent) !important;
+}
+
+[data-theme="daylight_slate"] .bg-cyan-500\/20,
+[data-theme="daylight_slate"] .bg-cyan-500\/15,
+[data-theme="daylight_slate"] .bg-cyan-500\/10 {
+  background-color: var(--badge-bg) !important;
+}
+
+[data-theme="daylight_slate"] .border-cyan-500\/50,
+[data-theme="daylight_slate"] .border-cyan-500\/40,
+[data-theme="daylight_slate"] .border-cyan-500\/20 {
+  border-color: var(--badge-border) !important;
 }
 
 /* Precision scrollbars */

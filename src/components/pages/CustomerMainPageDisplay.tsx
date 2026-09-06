@@ -26,6 +26,7 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import { DatabaseService } from '../../services/dbStore';
+import { ThemePalette } from '../ThemePalette';
 import { getTenantTables, formatINR, isPaid } from '../../data/tenantMapping';
 import { ComplaintRecord, NoticeRecord, NotificationRecord } from '../../types';
 
@@ -208,6 +209,10 @@ export const CustomerMainPageDisplay: React.FC<CustomerMainPageProps> = ({
             </div>
           </div>
 
+          <div className="pt-2">
+            <ThemePalette className="w-full mb-1" />
+          </div>
+
           <div className="flex items-center gap-2">
             <button
               id="btnInfo"
@@ -243,6 +248,7 @@ export const CustomerMainPageDisplay: React.FC<CustomerMainPageProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          <ThemePalette showLabel={false} />
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="p-2 rounded-lg bg-slate-800 text-slate-200 border border-slate-700"
@@ -314,6 +320,7 @@ export const CustomerMainPageDisplay: React.FC<CustomerMainPageProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
+            <ThemePalette />
             <div className="flex items-center gap-2 bg-slate-800/60 border border-slate-700/60 px-3.5 py-1.5 rounded-full text-xs text-slate-300">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               <span className="font-semibold text-white">Flat {tenantNumber}</span>
