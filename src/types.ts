@@ -67,6 +67,7 @@ export interface ComplaintRecord {
   priority: 'LOW' | 'MEDIUM' | 'HIGH';
   status: 'OPEN' | 'IN PROGRESS' | 'RESOLVED';
   createdAt: string;
+  lastUpdated?: string;
   resolvedAt?: string;
 }
 
@@ -78,6 +79,17 @@ export interface NoticeRecord {
   date: string;
   priority: 'NORMAL' | 'URGENT';
   isRead?: boolean;
+}
+
+export interface NotificationRecord {
+  id: string;
+  tenantNumber: string; // '11'..'41', 'ALL', or 'ADMIN'
+  title: string;
+  message: string;
+  type: 'PAYMENT_APPROVED' | 'PAYMENT_REJECTED' | 'URGENT_ANNOUNCEMENT' | 'MAINTENANCE_UPDATE' | 'NOTICE';
+  urgency: 'NORMAL' | 'URGENT';
+  createdAt: string;
+  isRead: boolean;
 }
 
 export type PageId =
@@ -102,6 +114,9 @@ export type PageId =
   | 'residencypage'
   | 'profilepage'
   | 'adminpaymentverify'
+  | 'adminmaintenance'
+  | 'adminannouncements'
+  | 'adminnotifications'
   | 'passwordallpage'
   | 'infopage'
   | 'sendpayment'

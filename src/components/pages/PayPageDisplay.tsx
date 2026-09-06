@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
 import { DatabaseService } from '../../services/dbStore';
 import { getTenantTables, formatINR } from '../../data/tenantMapping';
-import phonePeQrAsset from '../../assets/images/exact_phonepe_qr_1788086932803.jpg';
+import tempPaymentInstructionsImage from '../../assets/images/temp_payment_instructions.png';
 
 interface PayPageDisplayProps {
   tenantNumber: string;
@@ -20,12 +19,6 @@ export const PayPageDisplay: React.FC<PayPageDisplayProps> = ({
   const [notes, setNotes] = useState('');
   const [submissionSuccess, setSubmissionSuccess] = useState<string | null>(null);
   const [copiedUpi, setCopiedUpi] = useState(false);
-  const [customQrImage, setCustomQrImage] = useState<string | null>(() => {
-    return localStorage.getItem('tenant_hub_custom_qr_image') || null;
-  });
-  const [qrMode, setQrMode] = useState<'scannable' | 'uploaded'>(() => {
-    return localStorage.getItem('tenant_hub_custom_qr_image') ? 'uploaded' : 'scannable';
-  });
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
@@ -33,28 +26,6 @@ export const PayPageDisplay: React.FC<PayPageDisplayProps> = ({
     window.addEventListener('tenant_hub_db_updated', handleUpdate);
     return () => window.removeEventListener('tenant_hub_db_updated', handleUpdate);
   }, []);
-
-  const handleCustomQrUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const result = ev.target?.result as string;
-        if (result) {
-          setCustomQrImage(result);
-          localStorage.setItem('tenant_hub_custom_qr_image', result);
-          setQrMode('uploaded');
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleResetDefaultQr = () => {
-    setCustomQrImage(null);
-    localStorage.removeItem('tenant_hub_custom_qr_image');
-    setQrMode('scannable');
-  };
 
   const tenantInfo = useMemo(() => {
     try {
@@ -176,93 +147,46 @@ export const PayPageDisplay: React.FC<PayPageDisplayProps> = ({
             </span>
           </div>
 
-          {/* QR Code Container */}
-          <div className="relative p-4 bg-white rounded-2xl shadow-2xl border-4 border-purple-300/50 flex flex-col items-center w-full max-w-[280px]">
-            {/* View Mode switcher tabs */}
-            <div className="w-full flex items-center justify-center gap-1 mb-2.5 p-1 bg-purple-100/90 rounded-lg border border-purple-200 text-xs">
-              <button
-                type="button"
-                onClick={() => setQrMode('uploaded')}
-                className={`flex-1 py-1 px-2 rounded-md font-bold transition text-[11px] ${
-                  qrMode === 'uploaded'
-                    ? 'bg-[#5f259f] text-white shadow'
-                    : 'text-purple-900 hover:bg-purple-200'
-                }`}
-              >
-                Exact QR Pic
-              </button>
-              <button
-                type="button"
-                onClick={() => setQrMode('scannable')}
-                className={`flex-1 py-1 px-2 rounded-md font-bold transition text-[11px] ${
-                  qrMode === 'scannable'
-                    ? 'bg-[#5f259f] text-white shadow'
-                    : 'text-purple-900 hover:bg-purple-200'
-                }`}
-              >
-                Dynamic UPI
-              </button>
+          {/* Payment Instructions Container (Temporary Placeholder Image) */}
+          <div className="relative p-4 bg-white rounded-2xl shadow-2xl border-4 border-amber-400/80 flex flex-col items-center w-full max-w-[320px]">
+            {/* Prominent DO NOT USE ANY QR CODE Warning Badge */}
+            <div className="w-full bg-red-600 text-white font-black text-xs sm:text-sm uppercase tracking-wider py-2 px-2.5 rounded-xl text-center shadow mb-3 flex items-center justify-center gap-1.5 animate-pulse">
+              <span>⚠️</span>
+              <span>DO NOT USE ANY QR CODE</span>
             </div>
 
-            <div className="relative w-56 h-56 rounded-xl overflow-hidden flex items-center justify-center bg-black p-2 border border-black/80">
-              {qrMode === 'uploaded' ? (
-                /* Exact Uploaded PhonePe QR Picture */
-                <img
-                  src={customQrImage || phonePeQrAsset}
-                  alt="PhonePe QR Code - 9916913919@ibl"
-                  className="w-full h-full object-contain"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                /* Live Generated Scannable PhonePe QR Vector */
-                <div className="relative flex items-center justify-center w-full h-full bg-white rounded-lg p-1">
-                  <QRCodeSVG
-                    value={upiDeepLink}
-                    size={200}
-                    level="H"
-                    includeMargin={false}
-                    fgColor="#000000"
-                    bgColor="#ffffff"
-                  />
-                  {/* Center PhonePe पे Emblem */}
-                  <div className="absolute w-10 h-10 rounded-full bg-black border-2 border-white flex items-center justify-center shadow-lg">
-                    <span className="text-white font-black text-base leading-none select-none">पे</span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="mt-2.5 flex items-center gap-1.5 text-[11px] font-semibold text-purple-950 bg-purple-100 px-3 py-1 rounded-full border border-purple-200 text-center">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              Scan via PhonePe, GPay, Paytm or UPI
-            </div>
-
-            {/* Direct Upload pay.jpeg button */}
-            <div className="w-full mt-3 flex items-center justify-between gap-2 border-t border-purple-100 pt-2 text-[11px]">
-              <label
-                htmlFor="customQrUploadInput"
-                className="cursor-pointer text-[#5f259f] hover:text-[#441275] font-bold underline flex items-center gap-1"
-                title="Select your pay.jpeg file from device"
-              >
-                <span>📁 Upload / Replace Pic</span>
-              </label>
-              <input
-                id="customQrUploadInput"
-                type="file"
-                accept="image/*"
-                onChange={handleCustomQrUpload}
-                className="hidden"
+            {/* Temporary Payment Instructions Visual Placeholder */}
+            <div className="relative w-full rounded-xl overflow-hidden flex items-center justify-center bg-slate-950 p-1.5 border border-slate-800 shadow-inner">
+              <img
+                src={tempPaymentInstructionsImage}
+                alt="Payment Instructions: DO NOT USE ANY QR CODE"
+                className="w-full h-auto max-h-72 object-contain rounded-lg"
+                referrerPolicy="no-referrer"
               />
-              {customQrImage && (
-                <button
-                  type="button"
-                  onClick={handleResetDefaultQr}
-                  className="text-red-500 hover:text-red-700 font-semibold"
-                  title="Reset to default image"
-                >
-                  Reset
-                </button>
-              )}
+            </div>
+
+            {/* Clear Step-by-Step Payment Instructions (Requirement 14) */}
+            <div className="mt-3 w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-800 text-[11px] leading-relaxed space-y-2 font-medium">
+              <div className="font-bold text-red-600 uppercase text-[10px] tracking-wider border-b border-slate-200 pb-1 flex items-center gap-1">
+                <span>📋</span>
+                <span>Payment Verification Steps</span>
+              </div>
+              <div className="flex items-start gap-1.5">
+                <span className="font-black text-[#5f259f]">1.</span>
+                <span><strong>Copy Payment Address:</strong> Copy the official UPI ID <code className="bg-purple-100 px-1 py-0.5 rounded text-purple-900 font-mono font-bold">9916913919@ibl</code> below.</span>
+              </div>
+              <div className="flex items-start gap-1.5">
+                <span className="font-black text-[#5f259f]">2.</span>
+                <span><strong>Pay the Amount:</strong> Open PhonePe, Google Pay, or Paytm, paste the UPI ID, and pay <strong className="text-emerald-700">{formatINR(totalAmountToPay)}</strong>.</span>
+              </div>
+              <div className="flex items-start gap-1.5">
+                <span className="font-black text-[#5f259f]">3.</span>
+                <span><strong>Upload / Enter Transaction ID:</strong> After payment, paste the 12-digit UTR / Reference ID in the form on the right.</span>
+              </div>
+              <div className="flex items-start gap-1.5">
+                <span className="font-black text-[#5f259f]">4.</span>
+                <span><strong>Admin Confirmation:</strong> After the transaction ID is verified, the payment will be confirmed and your bills marked PAID.</span>
+              </div>
             </div>
           </div>
 

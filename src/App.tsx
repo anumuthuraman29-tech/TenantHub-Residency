@@ -20,6 +20,9 @@ import { CustomerInfoDisplay } from './components/pages/CustomerInfoDisplay';
 import { InfoAllPageDisplay } from './components/pages/InfoAllPageDisplay';
 import { InfoEditDisplay } from './components/pages/InfoEditDisplay';
 import { AdminPaymentVerifyDisplay } from './components/pages/AdminPaymentVerifyDisplay';
+import { AdminMaintenanceDisplay } from './components/pages/AdminMaintenanceDisplay';
+import { AdminAnnouncementsDisplay } from './components/pages/AdminAnnouncementsDisplay';
+import { AdminNotificationsDisplay } from './components/pages/AdminNotificationsDisplay';
 import { RentAllPageDisplay } from './components/pages/RentAllPageDisplay';
 import { WaterAllPageDisplay } from './components/pages/WaterAllPageDisplay';
 import { RentEditDisplay } from './components/pages/RentEditDisplay';
@@ -197,7 +200,43 @@ export default function App() {
             )}
 
             {currentPage === 'adminpaymentverify' && (
-              <AdminPaymentVerifyDisplay onNavigate={setCurrentPage} />
+              <AdminPaymentVerifyDisplay
+                onNavigate={setCurrentPage}
+                onLogout={() => {
+                  setUserRole('Customer');
+                  setCurrentPage('login');
+                }}
+              />
+            )}
+
+            {currentPage === 'adminmaintenance' && (
+              <AdminMaintenanceDisplay
+                onNavigate={setCurrentPage}
+                onLogout={() => {
+                  setUserRole('Customer');
+                  setCurrentPage('login');
+                }}
+              />
+            )}
+
+            {currentPage === 'adminannouncements' && (
+              <AdminAnnouncementsDisplay
+                onNavigate={setCurrentPage}
+                onLogout={() => {
+                  setUserRole('Customer');
+                  setCurrentPage('login');
+                }}
+              />
+            )}
+
+            {currentPage === 'adminnotifications' && (
+              <AdminNotificationsDisplay
+                onNavigate={setCurrentPage}
+                onLogout={() => {
+                  setUserRole('Customer');
+                  setCurrentPage('login');
+                }}
+              />
             )}
 
             {currentPage === 'rentpage' && (

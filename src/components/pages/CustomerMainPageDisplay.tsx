@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { DatabaseService } from '../../services/dbStore';
 import { getTenantTables, formatINR, isPaid } from '../../data/tenantMapping';
-import { ComplaintRecord, NoticeRecord } from '../../types';
+import { ComplaintRecord, NoticeRecord, NotificationRecord } from '../../types';
 
 interface CustomerMainPageProps {
   tenantNumber: string;
@@ -91,6 +91,14 @@ export const CustomerMainPageDisplay: React.FC<CustomerMainPageProps> = ({
   const notices = useMemo(() => {
     return DatabaseService.getNotices();
   }, [tick]);
+
+  const notifications = useMemo(() => {
+    return DatabaseService.getNotifications(tenantNumber || '11');
+  }, [tenantNumber, tick]);
+
+  const unreadNotifs = useMemo(() => {
+    return notifications.filter((n) => !n.isRead);
+  }, [notifications]);
 
   const isRentPaid = isPaid(latestRent?.PAID);
   const isWaterPaid = isPaid(latestWater?.PAID);
@@ -316,10 +324,14 @@ export const CustomerMainPageDisplay: React.FC<CustomerMainPageProps> = ({
             <button
               onClick={() => setActiveTab('notices')}
               className="relative p-2 rounded-full bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 text-slate-300 transition"
-              title="Residency Notices"
+              title="Residency Notices & Alerts"
             >
               <Bell className="w-4 h-4" />
-              <span className="absolute top-0 right-0 w-2 h-2 bg-teal-400 rounded-full" />
+              {unreadNotifs.length > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 bg-cyan-400 text-slate-950 text-[10px] font-black rounded-full flex items-center justify-center animate-pulse">
+                  {unreadNotifs.length}
+                </span>
+              )}
             </button>
           </div>
         </header>
@@ -329,6 +341,38 @@ export const CustomerMainPageDisplay: React.FC<CustomerMainPageProps> = ({
         {/* 1. DASHBOARD VIEW (PRIMARY) */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
+            {/* Unread Alert Banners */}
+            {unreadNotifs.length > 0 && (
+              <div className="space-y-2">
+                {unreadNotifs.slice(0, 2).map((n) => (
+                  <div
+                    key={n.id}
+                    className={`p-4 rounded-2xl border flex items-start justify-between gap-3 shadow-lg ${
+                      n.type === 'PAYMENT_APPROVED'
+                        ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200'
+                        : n.urgency === 'URGENT'
+                        ? 'bg-red-500/15 border-red-500/40 text-red-200 animate-pulse'
+                        : 'bg-cyan-500/15 border-cyan-500/40 text-cyan-200'
+                    }`}
+                  >
+                    <div className="space-y-0.5">
+                      <div className="text-xs font-bold flex items-center gap-2">
+                        <span>{n.title}</span>
+                        <span className="text-[10px] opacity-70">({n.createdAt})</span>
+                      </div>
+                      <p className="text-xs opacity-90">{n.message}</p>
+                    </div>
+                    <button
+                      onClick={() => DatabaseService.markNotificationRead(n.id)}
+                      className="px-2.5 py-1 rounded-lg bg-black/30 hover:bg-black/50 text-[11px] font-semibold transition shrink-0"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* 1.1 RESIDENCY CARD */}
             <div className="bg-gradient-to-r from-slate-900 via-[#111C2E] to-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl relative overflow-hidden">
               <div className="absolute top-0 right-0 w-64 h-64 bg-teal-500/5 rounded-full blur-3xl pointer-events-none" />
@@ -969,36 +1013,102 @@ export const CustomerMainPageDisplay: React.FC<CustomerMainPageProps> = ({
         {activeTab === 'notices' && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-xl font-extrabold text-white">Residency Bulletins & Notices</h2>
+              <h2 className="text-xl font-extrabold text-white">Residency Bulletins & In-App Alerts</h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                Official announcements from Tenant Hub Residency management
+                Official announcements and payment/maintenance dispatch notifications for Flat {tenantNumber}
               </p>
             </div>
 
-            <div className="space-y-3">
-              {notices.map((n) => (
-                <div
-                  key={n.id}
-                  className={`p-5 rounded-2xl border transition-all ${
-                    n.priority === 'URGENT'
-                      ? 'bg-amber-950/20 border-amber-500/30'
-                      : 'bg-slate-900 border-slate-800'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-sm text-white">{n.title}</span>
-                      {n.priority === 'URGENT' && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/20 text-red-300 border border-red-500/40">
-                          URGENT
-                        </span>
+            {/* In-App Notifications Section */}
+            {notifications.length > 0 && (
+              <div className="space-y-2 mb-6">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-teal-400 uppercase tracking-wider">
+                    Recent Alerts & Confirmation Feeds
+                  </h3>
+                  <button
+                    onClick={() => DatabaseService.markAllNotificationsRead(tenantNumber)}
+                    className="text-[11px] text-slate-400 hover:text-teal-300 font-semibold"
+                  >
+                    Mark All As Read
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {notifications.map((n) => (
+                    <div
+                      key={n.id}
+                      className={`p-4 rounded-xl border flex items-start justify-between gap-3 text-xs transition ${
+                        !n.isRead
+                          ? 'bg-slate-900 border-teal-500/40 shadow-sm'
+                          : 'bg-slate-900/50 border-slate-800/80 opacity-75'
+                      }`}
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-white">{n.title}</span>
+                          <span className="text-[10px] text-slate-400">{n.createdAt}</span>
+                          {!n.isRead && (
+                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-teal-500/20 text-teal-300 font-bold">
+                              NEW
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-slate-300">{n.message}</p>
+                      </div>
+
+                      {!n.isRead && (
+                        <button
+                          onClick={() => DatabaseService.markNotificationRead(n.id)}
+                          className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold shrink-0"
+                        >
+                          Mark Read
+                        </button>
                       )}
                     </div>
-                    <span className="text-xs text-slate-400">{n.date}</span>
-                  </div>
-                  <p className="text-xs text-slate-300 leading-relaxed">{n.description}</p>
+                  ))}
                 </div>
-              ))}
+              </div>
+            )}
+
+            {/* Residency Bulletins */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                Official Residency Bulletins
+              </h3>
+
+              {notices.length === 0 ? (
+                <div className="p-8 text-center bg-slate-900/60 border border-slate-800 rounded-2xl text-slate-400 text-xs">
+                  No public bulletins posted at this time.
+                </div>
+              ) : (
+                notices.map((n) => (
+                  <div
+                    key={n.id}
+                    className={`p-5 rounded-2xl border transition-all ${
+                      n.priority === 'URGENT'
+                        ? 'bg-amber-950/20 border-amber-500/30'
+                        : 'bg-slate-900 border-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm text-white">{n.title}</span>
+                        {n.priority === 'URGENT' && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/20 text-red-300 border border-red-500/40">
+                            URGENT
+                          </span>
+                        )}
+                        <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px]">
+                          {n.category}
+                        </span>
+                      </div>
+                      <span className="text-xs text-slate-400">{n.date}</span>
+                    </div>
+                    <p className="text-xs text-slate-300 leading-relaxed">{n.description}</p>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}

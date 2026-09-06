@@ -1,6 +1,15 @@
-import { RentRecord, WaterRecord, CustomerInfoRecord, PaymentSubmission, ComplaintRecord, NoticeRecord } from '../types';
-import { TENANT_TABLE_MAP, getTenantTables } from '../data/tenantMapping';
+import {
+  RentRecord,
+  WaterRecord,
+  CustomerInfoRecord,
+  PaymentSubmission,
+  ComplaintRecord,
+  NoticeRecord,
+  NotificationRecord,
+} from '../types';
+import { TENANT_TABLE_MAP, getTenantTables, formatINR, isPaid } from '../data/tenantMapping';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
+import { SmsService } from './smsService';
 
 const STORAGE_KEY = 'TENANT_HUB_SQL_DB_V3';
 
@@ -18,6 +27,7 @@ export interface SqlDatabaseState {
   paymentSubmissions: PaymentSubmission[];
   complaints?: ComplaintRecord[];
   notices?: NoticeRecord[];
+  notifications?: NotificationRecord[];
   adminUser: { username: string; passwordHash: string };
   passwords: Record<string, string>;
 }
@@ -155,6 +165,38 @@ const INITIAL_DB: SqlDatabaseState = {
       date: '25 Aug 2026',
       priority: 'NORMAL',
       isRead: true,
+    },
+  ],
+  notifications: [
+    {
+      id: 'NOTIF-1',
+      tenantNumber: '11',
+      title: 'Payment Approved ✅',
+      message: 'Your payment proof of ₹7,000.00 for Flat 101 has been verified and approved.',
+      type: 'PAYMENT_APPROVED',
+      urgency: 'NORMAL',
+      createdAt: '01 Aug 2026, 10:25 AM',
+      isRead: true,
+    },
+    {
+      id: 'NOTIF-2',
+      tenantNumber: 'ALL',
+      title: '🚨 Water Maintenance Notice',
+      message: 'Water supply will be temporarily paused tomorrow 10:00 AM to 01:00 PM for overhead tank cleaning.',
+      type: 'URGENT_ANNOUNCEMENT',
+      urgency: 'URGENT',
+      createdAt: '05 Sep 2026, 08:00 AM',
+      isRead: false,
+    },
+    {
+      id: 'NOTIF-3',
+      tenantNumber: 'ADMIN',
+      title: 'New Maintenance Ticket Submitted',
+      message: 'Muhammad Faiz (Flat 11) submitted a ticket: "Kitchen sink drainage slow".',
+      type: 'MAINTENANCE_UPDATE',
+      urgency: 'NORMAL',
+      createdAt: '02 Sep 2026, 11:30 AM',
+      isRead: false,
     },
   ],
   infoTables: {
@@ -478,6 +520,7 @@ export class DatabaseService {
       if (!parsed.paymentSubmissions) parsed.paymentSubmissions = INITIAL_DB.paymentSubmissions;
       if (!parsed.complaints || parsed.complaints.length === 0) parsed.complaints = INITIAL_DB.complaints;
       if (!parsed.notices || parsed.notices.length === 0) parsed.notices = INITIAL_DB.notices;
+      if (!parsed.notifications || parsed.notifications.length === 0) parsed.notifications = INITIAL_DB.notifications;
 
       // Migrate tenant 32 spelling if cached as previous value
       if (parsed.infoTables?.INFO_32?.[0] && parsed.infoTables.INFO_32[0].NAME !== 'Ankith Das') {
@@ -867,14 +910,17 @@ export class DatabaseService {
 
       // Live delete from Supabase, then sync remaining
       if (deletedItem && isSupabaseConfigured() && supabase) {
-        supabase
-          .from('rent_records')
-          .delete()
-          .eq('id', String(deletedItem.id))
-          .then(() => {
+        (async () => {
+          try {
+            await supabase
+              .from('rent_records')
+              .delete()
+              .eq('id', String(deletedItem.id));
             this.pushRentRecordsToSupabase(validTable);
-          })
-          .catch((err) => console.error('Supabase delete rent record error:', err));
+          } catch (err) {
+            console.error('Supabase delete rent record error:', err);
+          }
+        })();
       }
     }
     return this.recalculateRentTable(validTable);
@@ -1027,16 +1073,16 @@ export class DatabaseService {
       const db = this.getDB();
       const rows = Object.entries(db.infoTables).map(([key, list]) => {
         const tenantNum = key.replace('INFO_', '');
-        const info = list[0] || {};
+        const info = list[0] as CustomerInfoRecord | undefined;
         return {
           tenant_number: tenantNum,
-          name: info.NAME || `Tenant ${tenantNum}`,
-          phone: info.PHONE_NUMBER || '',
-          arrived_date: info.ARRIVED_DATE || '',
-          advance_paid: Number(info.ADVANCE_PAID) || 0,
-          current_rent: Number(info.CURRENT_RENT) || 0,
-          current_increment: Number(info.CURRENT_INCREMENT) || 0,
-          yearly_increment: Number(info.YEARLY_INCREMENT) || 5,
+          name: info?.NAME || `Tenant ${tenantNum}`,
+          phone: info?.PHONE_NUMBER || '',
+          arrived_date: info?.ARRIVED_DATE || '',
+          advance_paid: Number(info?.ADVANCE_PAID) || 0,
+          current_rent: Number(info?.CURRENT_RENT) || 0,
+          current_increment: Number(info?.CURRENT_INCREMENT) || 0,
+          yearly_increment: Number(info?.YEARLY_INCREMENT) || 5,
         };
       });
       const { error } = await supabase.from('tenant_infos').upsert(rows, { onConflict: 'tenant_number' });
@@ -1121,14 +1167,17 @@ export class DatabaseService {
 
       // Live delete from Supabase, then sync remaining
       if (deletedItem && isSupabaseConfigured() && supabase) {
-        supabase
-          .from('water_records')
-          .delete()
-          .eq('id', String(deletedItem.id))
-          .then(() => {
+        (async () => {
+          try {
+            await supabase
+              .from('water_records')
+              .delete()
+              .eq('id', String(deletedItem.id));
             this.pushWaterRecordsToSupabase(validTable);
-          })
-          .catch((err) => console.error('Supabase delete water record error:', err));
+          } catch (err) {
+            console.error('Supabase delete water record error:', err);
+          }
+        })();
       }
     }
     return this.recalculateWaterTable(validTable);
@@ -1176,6 +1225,64 @@ export class DatabaseService {
       this.saveDB(db);
       this.pushTenantInfosToSupabase().catch(() => {});
     }
+  }
+
+  public static getTenantInfoList(): CustomerInfoRecord[] {
+    const result: CustomerInfoRecord[] = [];
+    for (const num of Object.keys(TENANT_TABLE_MAP)) {
+      const rec = this.getInfoRecord(num);
+      if (rec) {
+        result.push(rec);
+      } else {
+        const mapInfo = TENANT_TABLE_MAP[num];
+        result.push({
+          id: num,
+          USERNAME: num,
+          NAME: mapInfo.tenantName,
+          PHONE_NUMBER: mapInfo.phone,
+          ARRIVED_DATE: '2023-01-15',
+          ADVANCE_PAID: 50000,
+          CURRENT_RENT: 12000,
+          CURRENT_INCREMENT: 600,
+          YEARLY_INCREMENT: 5,
+        });
+      }
+    }
+    return result;
+  }
+
+  public static getRentAllSummary(): { totalRent: number; totalPaid: number; pendingCount: number } {
+    let totalRent = 0;
+    let totalPaid = 0;
+    let pendingCount = 0;
+    for (const num of Object.keys(TENANT_TABLE_MAP)) {
+      const rent = this.getLatestRentRecord(num);
+      const tot = rent?.TOTAL ?? 0;
+      totalRent += tot;
+      if (isPaid(rent?.PAID)) {
+        totalPaid += rent?.PAYMENT ?? tot;
+      } else {
+        pendingCount++;
+      }
+    }
+    return { totalRent, totalPaid, pendingCount };
+  }
+
+  public static getWaterAllSummary(): { totalDue: number; totalPaid: number; pendingCount: number } {
+    let totalDue = 0;
+    let totalPaid = 0;
+    let pendingCount = 0;
+    for (const num of Object.keys(TENANT_TABLE_MAP)) {
+      const water = this.getLatestWaterRecord(num);
+      const tot = water?.TOTAL ?? 0;
+      totalDue += tot;
+      if (isPaid(water?.PAID)) {
+        totalPaid += tot;
+      } else {
+        pendingCount++;
+      }
+    }
+    return { totalDue, totalPaid, pendingCount };
   }
 
   // Customer Login Management (CUSTOMERLOGIN Table)
@@ -1251,29 +1358,102 @@ export class DatabaseService {
 
     sub.status = 'VERIFIED';
 
-    // Mark latest Rent and Water as PAID
+    // Mark latest Rent and Water as PAID and balance to 0
     const tenantNum = sub.tenantNumber;
     const info = TENANT_TABLE_MAP[tenantNum];
     if (info) {
       const rentList = db.rentTables[info.rentTable];
       if (rentList && rentList.length > 0) {
         rentList[0].PAID = 'PAID';
+        rentList[0].BALANCE = 0;
+        rentList[0].TOTAL = 0;
         rentList[0]['MODE OF PAYMENT'] = sub.paymentMode;
       }
       const waterList = db.waterTables[info.waterTable];
       if (waterList && waterList.length > 0) {
         waterList[0].PAID = 'PAID';
+        waterList[0].BALANCE = 0;
+        waterList[0].TOTAL = 0;
       }
+
+      // Live push updated tables to Supabase
+      this.pushRentRecordsToSupabase(info.rentTable).catch((err) =>
+        console.error('Failed to sync rent to Supabase on approval:', err)
+      );
+      this.pushWaterRecordsToSupabase(info.waterTable).catch((err) =>
+        console.error('Failed to sync water to Supabase on approval:', err)
+      );
     }
+
     this.saveDB(db);
+
+    // Update payment_submissions in Supabase
+    if (isSupabaseConfigured() && supabase) {
+      supabase
+        .from('payment_submissions')
+        .update({ status: 'VERIFIED' })
+        .eq('id', submissionId)
+        .then(({ error }) => {
+          if (error) console.warn('Supabase payment status update notice:', error.message);
+        });
+    }
+
+    // Add In-App Notification for Tenant
+    const residentName = this.getTenantResidentName(tenantNum);
+    const tenantPhone = this.getTenantPhone(tenantNum);
+    this.addNotification({
+      tenantNumber: tenantNum,
+      title: 'Payment Approved ✅',
+      message: `Your payment of ${formatINR(sub.amount)} for Flat ${tenantNum} (${residentName}) has been approved and verified. Outstanding rent & water dues are now ₹0.00 (PAID).`,
+      type: 'PAYMENT_APPROVED',
+      urgency: 'NORMAL',
+    });
+
+    // Automated SMS Alert
+    if (tenantPhone) {
+      SmsService.sendPaymentApprovedSms(tenantPhone, residentName, tenantNum, sub.amount).catch((err) =>
+        console.error('SMS notification error:', err)
+      );
+    }
   }
 
-  public static rejectPayment(submissionId: string) {
+  public static rejectPayment(submissionId: string, reason?: string) {
     const db = this.getDB();
     const sub = db.paymentSubmissions.find((s) => s.id === submissionId);
-    if (sub) {
-      sub.status = 'REJECTED';
-      this.saveDB(db);
+    if (!sub) return;
+
+    sub.status = 'REJECTED';
+    this.saveDB(db);
+
+    // Update payment_submissions in Supabase
+    if (isSupabaseConfigured() && supabase) {
+      supabase
+        .from('payment_submissions')
+        .update({ status: 'REJECTED' })
+        .eq('id', submissionId)
+        .then(({ error }) => {
+          if (error) console.warn('Supabase payment status update notice:', error.message);
+        });
+    }
+
+    // Add In-App Notification for Tenant
+    const residentName = this.getTenantResidentName(sub.tenantNumber);
+    const tenantPhone = this.getTenantPhone(sub.tenantNumber);
+    this.addNotification({
+      tenantNumber: sub.tenantNumber,
+      title: 'Payment Not Approved ⚠️',
+      message: `Your payment submission of ${formatINR(sub.amount)} for Flat ${sub.tenantNumber} could not be approved. Reason: ${
+        reason || 'Verification failed. Please review your UTR or contact management.'
+      }`,
+      type: 'PAYMENT_REJECTED',
+      urgency: 'URGENT',
+    });
+
+    // Automated SMS Alert
+    if (tenantPhone) {
+      SmsService.sendPaymentRejectedSms(tenantPhone, residentName, sub.tenantNumber, reason).catch((err) =>
+        console.error('SMS notification error:', err)
+      );
     }
   }
 
@@ -1363,16 +1543,32 @@ export class DatabaseService {
     const item = db.complaints.find((c) => c.id === complaintId);
     if (item) {
       item.status = status;
+      item.lastUpdated = new Date().toLocaleString([], {
+        year: 'numeric',
+        month: 'short',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
       if (status === 'RESOLVED') {
-        item.resolvedAt = new Date().toLocaleString([], {
-          year: 'numeric',
-          month: 'short',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-        });
+        item.resolvedAt = item.lastUpdated;
       }
       this.saveDB(db);
+
+      // In-app notification for the tenant
+      this.addNotification({
+        tenantNumber: item.tenantNumber,
+        title: `Maintenance Request ${status} 🛠️`,
+        message: `Your maintenance ticket "${item.title}" for ${item.room} has been updated to ${status}.`,
+        type: 'MAINTENANCE_UPDATE',
+        urgency: status === 'RESOLVED' ? 'NORMAL' : 'NORMAL',
+      });
+
+      // SMS alert
+      const tenantPhone = this.getTenantPhone(item.tenantNumber);
+      if (tenantPhone) {
+        SmsService.sendMaintenanceStatusSms(tenantPhone, item.tenantName, item.title, status).catch(console.error);
+      }
     }
   }
 
@@ -1380,6 +1576,82 @@ export class DatabaseService {
   public static getNotices(): NoticeRecord[] {
     const db = this.getDB();
     return db.notices || [];
+  }
+
+  public static createNotice(data: {
+    title: string;
+    description: string;
+    category: 'Maintenance' | 'Security' | 'General' | 'Event' | 'Payment';
+    priority?: 'NORMAL' | 'URGENT';
+  }): NoticeRecord {
+    const db = this.getDB();
+    if (!db.notices) db.notices = [];
+    const newNotice: NoticeRecord = {
+      id: `NOT-${Date.now().toString().slice(-4)}`,
+      title: data.title.trim(),
+      description: data.description.trim(),
+      category: data.category,
+      priority: data.priority || 'NORMAL',
+      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      isRead: false,
+    };
+    db.notices.unshift(newNotice);
+    this.saveDB(db);
+
+    if (newNotice.priority === 'URGENT') {
+      this.publishUrgentNotice(newNotice.id);
+    }
+
+    return newNotice;
+  }
+
+  public static updateNotice(id: string, data: Partial<NoticeRecord>) {
+    const db = this.getDB();
+    if (!db.notices) return;
+    const idx = db.notices.findIndex((n) => n.id === id);
+    if (idx !== -1) {
+      const wasUrgent = db.notices[idx].priority === 'URGENT';
+      db.notices[idx] = { ...db.notices[idx], ...data };
+      this.saveDB(db);
+      if (data.priority === 'URGENT' && !wasUrgent) {
+        this.publishUrgentNotice(id);
+      }
+    }
+  }
+
+  public static deleteNotice(id: string) {
+    const db = this.getDB();
+    if (!db.notices) return;
+    db.notices = db.notices.filter((n) => n.id !== id);
+    this.saveDB(db);
+  }
+
+  public static publishUrgentNotice(noticeId: string) {
+    const db = this.getDB();
+    const notice = (db.notices || []).find((n) => n.id === noticeId);
+    if (!notice) return;
+
+    notice.priority = 'URGENT';
+    this.saveDB(db);
+
+    // Create high-priority in-app notification broadcasted to all residents
+    this.addNotification({
+      tenantNumber: 'ALL',
+      title: `🚨 URGENT: ${notice.title}`,
+      message: notice.description,
+      type: 'URGENT_ANNOUNCEMENT',
+      urgency: 'URGENT',
+    });
+
+    // Dispatch SMS to all registered tenant phone numbers
+    Object.keys(TENANT_TABLE_MAP).forEach((num) => {
+      const phone = this.getTenantPhone(num);
+      if (phone) {
+        SmsService.sendUrgentAnnouncementSms(phone, notice.title, notice.description).catch((err) =>
+          console.error(`Urgent announcement SMS failed for ${num}:`, err)
+        );
+      }
+    });
   }
 
   public static markNoticeRead(noticeId: string) {
@@ -1390,6 +1662,79 @@ export class DatabaseService {
       notice.isRead = true;
       this.saveDB(db);
     }
+  }
+
+  // Notifications Management
+  public static getNotifications(tenantNumber?: string): NotificationRecord[] {
+    const db = this.getDB();
+    const list = db.notifications || [];
+    if (!tenantNumber) return list;
+    if (tenantNumber === 'ADMIN') {
+      return list.filter((n) => n.tenantNumber === 'ADMIN' || n.tenantNumber === 'ALL');
+    }
+    return list.filter((n) => n.tenantNumber === tenantNumber || n.tenantNumber === 'ALL');
+  }
+
+  public static addNotification(data: {
+    tenantNumber: string;
+    title: string;
+    message: string;
+    type: 'PAYMENT_APPROVED' | 'PAYMENT_REJECTED' | 'URGENT_ANNOUNCEMENT' | 'MAINTENANCE_UPDATE' | 'NOTICE';
+    urgency?: 'NORMAL' | 'URGENT';
+  }): NotificationRecord {
+    const db = this.getDB();
+    if (!db.notifications) db.notifications = [];
+    const newNotif: NotificationRecord = {
+      id: `NOTIF-${Date.now().toString().slice(-6)}`,
+      tenantNumber: data.tenantNumber,
+      title: data.title,
+      message: data.message,
+      type: data.type,
+      urgency: data.urgency || 'NORMAL',
+      createdAt: new Date().toLocaleString([], {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+      isRead: false,
+    };
+    db.notifications.unshift(newNotif);
+    this.saveDB(db);
+    return newNotif;
+  }
+
+  public static markNotificationRead(id: string) {
+    const db = this.getDB();
+    if (!db.notifications) return;
+    const notif = db.notifications.find((n) => n.id === id);
+    if (notif) {
+      notif.isRead = true;
+      this.saveDB(db);
+    }
+  }
+
+  public static markAllNotificationsRead(tenantNumber?: string) {
+    const db = this.getDB();
+    if (!db.notifications) return;
+    db.notifications.forEach((n) => {
+      if (!tenantNumber || n.tenantNumber === tenantNumber || n.tenantNumber === 'ALL') {
+        n.isRead = true;
+      }
+    });
+    this.saveDB(db);
+  }
+
+  public static clearNotifications(tenantNumber?: string) {
+    const db = this.getDB();
+    if (!db.notifications) return;
+    if (!tenantNumber) {
+      db.notifications = [];
+    } else {
+      db.notifications = db.notifications.filter((n) => n.tenantNumber !== tenantNumber);
+    }
+    this.saveDB(db);
   }
 
   public static resetDefaults() {
