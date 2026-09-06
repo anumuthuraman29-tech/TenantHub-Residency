@@ -39,13 +39,23 @@ export const PaymentPageDisplay: React.FC<PaymentPageDisplayProps> = ({
     return DatabaseService.getLatestWaterRecord(tenantNumber);
   }, [tenantNumber, tick]);
 
-  const isRentPaid = isPaid(latestRent?.PAID);
-  const isWaterPaid = isPaid(latestWater?.PAID);
-  const isOverallPaid = isRentPaid && isWaterPaid;
+  const billSummary = useMemo(() => {
+    return DatabaseService.getTenantPaymentSummary(tenantNumber || '11');
+  }, [tenantNumber, tick]);
+
+  const {
+    isRentPaid,
+    isWaterPaid,
+    rentOutstanding,
+    waterOutstanding,
+    grandTotal,
+    isOverallPaid,
+    status: overallStatus,
+    pendingSubmission: pendingPayment,
+  } = billSummary;
 
   const rentTotal = latestRent?.TOTAL ?? 0;
   const waterTotal = latestWater?.TOTAL ?? 0;
-  const grandTotal = rentTotal + waterTotal;
   const residentName = DatabaseService.getTenantResidentName(tenantNumber || '11');
 
   if (!tenantInfo) {

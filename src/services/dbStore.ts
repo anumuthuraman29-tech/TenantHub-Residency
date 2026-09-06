@@ -630,16 +630,23 @@ export class DatabaseService {
             (x) => String(x.id) === String(r.id) || x.DATE === r.date
           );
           const paymentVal = Number(r.payment) || 0;
-          const balanceVal = Number(
-            r.previous_balance !== undefined && r.previous_balance !== null
-              ? r.previous_balance
-              : (r.balance !== undefined ? r.balance : 0)
-          ) || 0;
-          const totalVal = Number(
-            r.total !== undefined && r.total !== null
-              ? r.total
-              : (paymentVal + balanceVal)
-          ) || 0;
+          const isPaidStatus = (r.paid || '').toUpperCase() === 'PAID';
+          const balanceVal = isPaidStatus
+            ? 0
+            : Number(
+                r.unpaid !== undefined && r.unpaid !== null
+                  ? r.unpaid
+                  : (r.previous_balance !== undefined && r.previous_balance !== null
+                      ? r.previous_balance
+                      : (r.balance !== undefined ? r.balance : 0))
+              ) || 0;
+          const totalVal = isPaidStatus
+            ? 0
+            : Number(
+                r.total !== undefined && r.total !== null
+                  ? r.total
+                  : (paymentVal + balanceVal)
+              ) || 0;
 
           const formatted: RentRecord = {
             id: r.id,
@@ -668,6 +675,9 @@ export class DatabaseService {
           const existingIdx = db.waterTables[tName].findIndex(
             (x) => String(x.id) === String(w.id) || x.DATE === w.date
           );
+          const isWaterPaidStatus = (w.paid || '').toUpperCase() === 'PAID';
+          const balanceVal = isWaterPaidStatus ? 0 : Number(w.balance) || 0;
+          const totalVal = isWaterPaidStatus ? 0 : Number(w.total) || 0;
           const formatted: WaterRecord = {
             id: w.id,
             DATE: w.date,
@@ -676,9 +686,9 @@ export class DatabaseService {
             CURRENT_READINGS: Number(w.current_reading || w.current_readings) || 0,
             KITCHEN: Number(w.kitchen) || 0,
             TOTAL_BILL: Number(w.total_bill) || 0,
-            BALANCE: Number(w.balance) || 0,
+            BALANCE: balanceVal,
             PAID: (w.paid || 'NOT PAID').toUpperCase(),
-            TOTAL: Number(w.total) || 0,
+            TOTAL: totalVal,
           };
           if (existingIdx !== -1) {
             db.waterTables[tName][existingIdx] = formatted;
@@ -730,6 +740,55 @@ export class DatabaseService {
     if (rows.length === 0) return null;
     const sorted = [...rows].sort((a, b) => (b.DATE > a.DATE ? 1 : -1));
     return sorted[0];
+  }
+
+  // Centralized Grand Total & Outstanding Balance Logic for Tenant Hub
+  public static getTenantPaymentSummary(tenantNumber: string) {
+    const latestRent = this.getLatestRentRecord(tenantNumber);
+    const latestWater = this.getLatestWaterRecord(tenantNumber);
+
+    const isRentPaid = isPaid(latestRent?.PAID);
+    const isWaterPaid = isPaid(latestWater?.PAID);
+
+    // Outstanding balance calculations:
+    // 1. If RENT is PAID -> Rent contributes ₹0 to Grand Total
+    // 2. If WATER is PAID -> Water contributes ₹0 to Grand Total
+    // 3. If RENT is NOT PAID -> Add only the current outstanding rent balance
+    // 4. If WATER is NOT PAID -> Add only the current outstanding water balance
+    const rentOutstanding = isRentPaid
+      ? 0
+      : Number(latestRent?.TOTAL ?? (Number(latestRent?.PAYMENT || 0) + Number(latestRent?.BALANCE || 0)));
+    const waterOutstanding = isWaterPaid
+      ? 0
+      : Number(latestWater?.TOTAL ?? (Number(latestWater?.TOTAL_BILL || 0) + Number(latestWater?.BALANCE || 0)));
+
+    const grandTotal = rentOutstanding + waterOutstanding;
+    const isOverallPaid = grandTotal === 0;
+
+    const pendingSubmission = this.getPaymentSubmissions().find(
+      (s) => s.tenantNumber === tenantNumber && s.status === 'PENDING'
+    );
+
+    const status: 'PAID' | 'PENDING' | 'NOT PAID' = isOverallPaid
+      ? 'PAID'
+      : pendingSubmission
+      ? 'PENDING'
+      : 'NOT PAID';
+
+    return {
+      latestRent,
+      latestWater,
+      isRentPaid,
+      isWaterPaid,
+      rentOutstanding,
+      waterOutstanding,
+      rentTotal: latestRent?.TOTAL ?? 0,
+      waterTotal: latestWater?.TOTAL ?? 0,
+      grandTotal,
+      isOverallPaid,
+      pendingSubmission,
+      status,
+    };
   }
 
   // Rent CRUD
@@ -1395,6 +1454,23 @@ export class DatabaseService {
         .eq('id', submissionId)
         .then(({ error }) => {
           if (error) console.warn('Supabase payment status update notice:', error.message);
+        });
+
+      // Explicitly ensure Supabase rent_records and water_records reflect PAID status and 0 balance
+      supabase
+        .from('rent_records')
+        .update({ paid: 'PAID', unpaid: 0, previous_balance: 0 })
+        .eq('tenant_number', tenantNum)
+        .then(({ error }) => {
+          if (error) console.warn('Supabase rent_records update notice on approval:', error.message);
+        });
+
+      supabase
+        .from('water_records')
+        .update({ paid: 'PAID', balance: 0, total: 0 })
+        .eq('tenant_number', tenantNum)
+        .then(({ error }) => {
+          if (error) console.warn('Supabase water_records update notice on approval:', error.message);
         });
     }
 

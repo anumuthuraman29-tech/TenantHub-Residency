@@ -101,13 +101,24 @@ export const CustomerMainPageDisplay: React.FC<CustomerMainPageProps> = ({
     return notifications.filter((n) => !n.isRead);
   }, [notifications]);
 
-  const isRentPaid = isPaid(latestRent?.PAID);
-  const isWaterPaid = isPaid(latestWater?.PAID);
-  const isOverallPaid = isRentPaid && isWaterPaid;
+  // Payment Summary based on latest bill status and outstanding balance
+  const billSummary = useMemo(() => {
+    return DatabaseService.getTenantPaymentSummary(tenantNumber || '11');
+  }, [tenantNumber, tick]);
+
+  const {
+    isRentPaid,
+    isWaterPaid,
+    rentOutstanding,
+    waterOutstanding,
+    grandTotal,
+    isOverallPaid,
+    status: overallStatus,
+    pendingSubmission: pendingPayment,
+  } = billSummary;
 
   const rentTotal = latestRent?.TOTAL ?? 0;
   const waterTotal = latestWater?.TOTAL ?? 0;
-  const grandTotal = rentTotal + waterTotal;
 
   // Time-based greeting
   const greeting = useMemo(() => {
@@ -510,15 +521,15 @@ export const CustomerMainPageDisplay: React.FC<CustomerMainPageProps> = ({
                         className="flex-1 py-2 px-3 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 text-xs font-bold transition shadow-md flex items-center justify-center gap-1.5"
                       >
                         <CreditCard className="w-3.5 h-3.5" />
-                        <span>Pay Now</span>
+                        <span>Pay {formatINR(rentOutstanding)}</span>
                       </button>
                     ) : (
                       <button
-                        onClick={() => onNavigate('paypage')}
-                        className="flex-1 py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition flex items-center justify-center gap-1.5"
+                        disabled
+                        className="flex-1 py-2 px-3 rounded-xl bg-slate-800/80 text-emerald-400 text-xs font-semibold cursor-not-allowed flex items-center justify-center gap-1.5 border border-slate-700/50"
                       >
                         <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Receipt / Re-pay</span>
+                        <span>Rent Paid (₹0 Due)</span>
                       </button>
                     )}
 
@@ -584,15 +595,15 @@ export const CustomerMainPageDisplay: React.FC<CustomerMainPageProps> = ({
                         className="flex-1 py-2 px-3 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 text-xs font-bold transition shadow-md flex items-center justify-center gap-1.5"
                       >
                         <CreditCard className="w-3.5 h-3.5" />
-                        <span>Pay Now</span>
+                        <span>Pay {formatINR(waterOutstanding)}</span>
                       </button>
                     ) : (
                       <button
-                        onClick={() => onNavigate('paypage')}
-                        className="flex-1 py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition flex items-center justify-center gap-1.5"
+                        disabled
+                        className="flex-1 py-2 px-3 rounded-xl bg-slate-800/80 text-emerald-400 text-xs font-semibold cursor-not-allowed flex items-center justify-center gap-1.5 border border-slate-700/50"
                       >
                         <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Receipt</span>
+                        <span>Water Paid (₹0 Due)</span>
                       </button>
                     )}
 
@@ -654,19 +665,58 @@ export const CustomerMainPageDisplay: React.FC<CustomerMainPageProps> = ({
                     ₹
                   </div>
                   <div>
-                    <span className="text-xs text-slate-400 block font-medium">Grand Total (Rent + Water)</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400 block font-medium">Grand Total (Rent + Water)</span>
+                      {isOverallPaid ? (
+                        <span className="status-badge status-badge-paid">
+                          <CheckCircle2 className="w-3 h-3" />
+                          PAID
+                        </span>
+                      ) : pendingPayment ? (
+                        <span className="status-badge status-badge-pending">
+                          <Clock className="w-3 h-3" />
+                          PENDING
+                        </span>
+                      ) : (
+                        <span className="status-badge status-badge-not-paid">
+                          <AlertCircle className="w-3 h-3" />
+                          NOT PAID
+                        </span>
+                      )}
+                    </div>
                     <span className="text-xl sm:text-2xl font-black text-white">{formatINR(grandTotal)}</span>
+                    <div className="text-[11px] text-slate-400 mt-0.5">
+                      {isOverallPaid ? (
+                        <span className="text-emerald-400 font-medium">All bills are fully paid (₹0.00 outstanding)</span>
+                      ) : (
+                        <span>
+                          Rent: <strong className={isRentPaid ? 'text-emerald-400 font-normal' : 'text-slate-200'}>{isRentPaid ? 'PAID (₹0)' : formatINR(rentOutstanding)}</strong>
+                          {' • '}
+                          Water: <strong className={isWaterPaid ? 'text-emerald-400 font-normal' : 'text-slate-200'}>{isWaterPaid ? 'PAID (₹0)' : formatINR(waterOutstanding)}</strong>
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3 w-full sm:w-auto">
-                  <button
-                    onClick={() => onNavigate('paypage')}
-                    className="flex-1 sm:flex-none py-2.5 px-6 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-extrabold text-xs tracking-wider uppercase transition shadow-lg flex items-center justify-center gap-2"
-                  >
-                    <span>Instant UPI Checkout</span>
-                    <ArrowUpRight className="w-4 h-4" />
-                  </button>
+                  {isOverallPaid ? (
+                    <button
+                      disabled
+                      className="flex-1 sm:flex-none py-2.5 px-6 rounded-xl bg-emerald-500/20 text-emerald-300 font-extrabold text-xs tracking-wider uppercase border border-emerald-500/30 cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      <span>All Bills Paid</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => onNavigate('paypage')}
+                      className="flex-1 sm:flex-none py-2.5 px-6 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-extrabold text-xs tracking-wider uppercase transition shadow-lg flex items-center justify-center gap-2"
+                    >
+                      <span>Pay {formatINR(grandTotal)}</span>
+                      <ArrowUpRight className="w-4 h-4" />
+                    </button>
+                  )}
                   <button
                     onClick={() => onNavigate('paymentpage')}
                     className="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition border border-slate-700"
@@ -689,7 +739,7 @@ export const CustomerMainPageDisplay: React.FC<CustomerMainPageProps> = ({
                 >
                   <CreditCard className="w-5 h-5 text-teal-400 mb-2 group-hover:scale-110 transition" />
                   <div className="text-xs font-bold text-white">Pay Bills</div>
-                  <div className="text-[10px] text-slate-400">PhonePe & UPI</div>
+                  <div className="text-[10px] text-slate-400">{isOverallPaid ? 'All Bills Paid' : `Due: ${formatINR(grandTotal)}`}</div>
                 </button>
 
                 <button
@@ -845,10 +895,15 @@ export const CustomerMainPageDisplay: React.FC<CustomerMainPageProps> = ({
               </div>
               <button
                 onClick={() => onNavigate('paypage')}
-                className="py-2 px-4 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md"
+                disabled={isOverallPaid}
+                className={`py-2 px-4 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-md ${
+                  isOverallPaid
+                    ? 'bg-slate-800 text-slate-400 border border-slate-700 cursor-not-allowed'
+                    : 'bg-teal-500 hover:bg-teal-400 text-slate-950'
+                }`}
               >
-                <CreditCard className="w-4 h-4" />
-                <span>Pay via PhonePe / UPI</span>
+                {isOverallPaid ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <CreditCard className="w-4 h-4" />}
+                <span>{isOverallPaid ? 'All Bills Paid (₹0.00 Due)' : `Pay ${formatINR(grandTotal)}`}</span>
               </button>
             </div>
 
@@ -857,31 +912,52 @@ export const CustomerMainPageDisplay: React.FC<CustomerMainPageProps> = ({
               className={`p-5 rounded-2xl border flex flex-col sm:flex-row items-center justify-between gap-4 ${
                 isOverallPaid
                   ? 'bg-emerald-950/20 border-emerald-500/40 text-emerald-200'
+                  : pendingPayment
+                  ? 'bg-amber-950/20 border-amber-500/40 text-amber-200'
                   : 'bg-red-950/20 border-red-500/40 text-red-200'
               }`}
             >
               <div className="flex items-center gap-3">
                 {isOverallPaid ? (
                   <CheckCircle2 className="w-8 h-8 text-emerald-400 shrink-0" />
+                ) : pendingPayment ? (
+                  <Clock className="w-8 h-8 text-amber-400 shrink-0" />
                 ) : (
                   <AlertCircle className="w-8 h-8 text-red-400 shrink-0 animate-pulse" />
                 )}
                 <div>
-                  <div className="font-extrabold text-sm sm:text-base">
-                    {isOverallPaid ? 'All Dues Cleared' : 'Outstanding Balance Due'}
+                  <div className="font-extrabold text-sm sm:text-base flex items-center gap-2">
+                    <span>{isOverallPaid ? 'All Dues Cleared' : (pendingPayment ? 'Payment Pending Verification' : 'Outstanding Balance Due')}</span>
+                    {isOverallPaid ? (
+                      <span className="status-badge status-badge-paid">PAID</span>
+                    ) : pendingPayment ? (
+                      <span className="status-badge status-badge-pending">PENDING</span>
+                    ) : (
+                      <span className="status-badge status-badge-not-paid">NOT PAID</span>
+                    )}
                   </div>
                   <div className="text-xs opacity-90 mt-0.5">
                     {isOverallPaid
-                      ? 'No outstanding payments for rent or water at this time.'
+                      ? 'No outstanding payments for rent or water at this time (Grand Total: ₹ 0.00).'
+                      : pendingPayment
+                      ? `Your payment of ${formatINR(pendingPayment.amount)} is pending admin verification.`
                       : `Total Outstanding Dues: ${formatINR(grandTotal)}. Please clear before due date.`}
                   </div>
                 </div>
               </div>
 
-              {!isOverallPaid && (
+              {isOverallPaid ? (
+                <button
+                  disabled
+                  className="py-2.5 px-6 rounded-xl bg-emerald-500/20 text-emerald-300 font-bold text-xs uppercase tracking-wider border border-emerald-500/30 cursor-not-allowed flex items-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>All Bills Paid</span>
+                </button>
+              ) : (
                 <button
                   onClick={() => onNavigate('paypage')}
-                  className="py-2.5 px-6 rounded-xl bg-red-500 hover:bg-red-400 text-white font-bold text-xs shadow-lg uppercase tracking-wider"
+                  className="py-2.5 px-6 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs shadow-lg uppercase tracking-wider"
                 >
                   Pay {formatINR(grandTotal)} Now
                 </button>
