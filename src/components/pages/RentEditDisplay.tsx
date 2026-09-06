@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { DatabaseService } from '../../services/dbStore';
 import { RentRecord } from '../../types';
+import { Cloud, RefreshCw, CheckCircle2 } from 'lucide-react';
 
 interface RentEditDisplayProps {
   initialTenantNumber?: string;
@@ -72,6 +73,33 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
 
   // Status/Alert Message
   const [message, setMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+  const [isSyncingSupabase, setIsSyncingSupabase] = useState<boolean>(false);
+
+  const handleSyncSupabase = async () => {
+    setIsSyncingSupabase(true);
+    try {
+      const result = await DatabaseService.pushAllToSupabase();
+      if (result.success) {
+        setMessage({
+          text: `Direct sync complete! Synced ${result.rentCount} rent records and ${result.waterCount} water records directly to Supabase.`,
+          isError: false,
+        });
+      } else {
+        setMessage({
+          text: `Supabase sync alert: ${result.error || 'Check network connection'}`,
+          isError: true,
+        });
+      }
+    } catch (e: any) {
+      setMessage({
+        text: `Sync error: ${e?.message || 'Failed to sync with Supabase'}`,
+        isError: true,
+      });
+    } finally {
+      setIsSyncingSupabase(false);
+      loadRecords(activeTable);
+    }
+  };
 
   // Form Fields State (in exact order: Date, Day, Payment, Balance, Total, Mode of Payment, Paid)
   const [date, setDate] = useState<string>('');
@@ -198,7 +226,7 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
     });
 
     setMessage({
-      text: `Rent record for ${date} added successfully to [${activeTable}]!`,
+      text: `Rent record for ${date} added and synced with Supabase for [${activeTable}]!`,
       isError: false,
     });
 
@@ -242,7 +270,7 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
     });
 
     setMessage({
-      text: `Rent record updated successfully in [${activeTable}]!`,
+      text: `Rent record updated and synced with Supabase in [${activeTable}]!`,
       isError: false,
     });
 
@@ -264,7 +292,7 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
     DatabaseService.deleteRentRecord(activeTable, selectedRecordId);
 
     setMessage({
-      text: `Rent record deleted and balances recalculated for [${activeTable}]!`,
+      text: `Rent record deleted and synchronized with Supabase for [${activeTable}]!`,
       isError: false,
     });
 
@@ -312,14 +340,32 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
             </div>
           </div>
 
-          <button
-            id="btnBack"
-            type="button"
-            onClick={() => onNavigate('rentallpage')}
-            className="hub-btn hub-btn-primary px-6 py-2.5 font-semibold text-sm text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
-          >
-            Back
-          </button>
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+            <button
+              id="btnSyncSupabase"
+              type="button"
+              onClick={handleSyncSupabase}
+              disabled={isSyncingSupabase}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-600/25 hover:bg-emerald-600/40 border border-emerald-400/40 text-emerald-200 text-xs font-bold transition-all shadow-md active:scale-95 disabled:opacity-50 cursor-pointer"
+              title="Sync all local records directly to Supabase cloud database"
+            >
+              {isSyncingSupabase ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Cloud className="w-3.5 h-3.5 text-emerald-300" />
+              )}
+              <span>{isSyncingSupabase ? 'Syncing...' : 'Sync Supabase'}</span>
+            </button>
+
+            <button
+              id="btnBack"
+              type="button"
+              onClick={() => onNavigate('rentallpage')}
+              className="hub-btn hub-btn-primary px-6 py-2.5 font-semibold text-sm text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
+            >
+              Back
+            </button>
+          </div>
         </div>
 
         {/* Table Selector Pills */}

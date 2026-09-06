@@ -29,6 +29,7 @@ import { SendPaymentDisplay } from './components/pages/SendPaymentDisplay';
 import { InfoPageDisplay, PasswordAllPageDisplay } from './components/pages/OtherPagesDisplay';
 
 import { Building2 } from 'lucide-react';
+import { initializeSupabaseRealtime } from './services/supabaseRealtime';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<string>('login');
@@ -51,6 +52,10 @@ export default function App() {
 
   useEffect(() => {
     DatabaseService.syncFromSupabase();
+    const unsubscribe = initializeSupabaseRealtime();
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const handleLoginSuccess = (role: 'Admin' | 'Customer', tenantNumber?: string) => {

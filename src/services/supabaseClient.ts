@@ -4,10 +4,20 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 const defaultUrl = 'https://xcpvuqkpdwkwlpgxaufx.supabase.co';
 const defaultKey = 'sb_publishable_jUEvpCHbZm6soGwKusc7qA_k324GWh3';
 
-const rawUrl = (import.meta.env.VITE_SUPABASE_URL || defaultUrl).trim();
+const envUrl =
+  (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_SUPABASE_URL) ||
+  (typeof process !== 'undefined' && process?.env?.VITE_SUPABASE_URL) ||
+  defaultUrl;
+
+const envKey =
+  (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_SUPABASE_ANON_KEY) ||
+  (typeof process !== 'undefined' && process?.env?.VITE_SUPABASE_ANON_KEY) ||
+  defaultKey;
+
+const rawUrl = String(envUrl).trim();
 // Strip trailing /rest/v1 or trailing slashes if present
 const supabaseUrl = rawUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
-const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || defaultKey).trim();
+const supabaseAnonKey = String(envKey).trim();
 
 let client: SupabaseClient | null = null;
 
