@@ -57,20 +57,24 @@ export const PayPageDisplay: React.FC<PayPageDisplayProps> = ({
     `Rent and Water Bill Grand Total - Flat ${tenantNumber}`
   )}`;
 
+  useEffect(() => {
+    DatabaseService.syncFromSupabase().catch(() => {});
+  }, []);
+
   const handleCopyUpi = () => {
     navigator.clipboard.writeText(upiId);
     setCopiedUpi(true);
     setTimeout(() => setCopiedUpi(false), 2000);
   };
 
-  const handleSubmitProof = (e: React.FormEvent) => {
+  const handleSubmitProof = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!utrNumber.trim()) {
       alert('Please enter your UPI Reference / UTR Number or Transaction ID');
       return;
     }
 
-    const sub = DatabaseService.submitPaymentProof(
+    const sub = await DatabaseService.submitPaymentProof(
       tenantNumber || '11',
       totalAmountToPay,
       utrNumber.trim(),

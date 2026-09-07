@@ -40,13 +40,14 @@ export const AdminPaymentVerifyDisplay: React.FC<AdminPaymentVerifyProps> = ({
 
   useEffect(() => {
     refreshData();
+    DatabaseService.syncFromSupabase().catch(() => {});
     const handleUpdate = () => refreshData();
     window.addEventListener('tenant_hub_db_updated', handleUpdate);
     return () => window.removeEventListener('tenant_hub_db_updated', handleUpdate);
   }, []);
 
-  const handleApprove = (subId: string, tenantNum: string, amount: number) => {
-    DatabaseService.approvePayment(subId);
+  const handleApprove = async (subId: string, tenantNum: string, amount: number) => {
+    await DatabaseService.approvePayment(subId);
     refreshData();
     setStatusMessage(
       `✓ Payment ${subId} (${formatINR(amount)}) APPROVED! Rent & Water for Flat ${tenantNum} marked PAID with ₹0 balance. In-app & SMS notification sent.`
@@ -59,11 +60,11 @@ export const AdminPaymentVerifyDisplay: React.FC<AdminPaymentVerifyProps> = ({
     setRejectReason('');
   };
 
-  const handleConfirmReject = (e: React.FormEvent) => {
+  const handleConfirmReject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!rejectModalId) return;
 
-    DatabaseService.rejectPayment(rejectModalId, rejectReason.trim() || undefined);
+    await DatabaseService.rejectPayment(rejectModalId, rejectReason.trim() || undefined);
     setRejectModalId(null);
     setRejectReason('');
     refreshData();

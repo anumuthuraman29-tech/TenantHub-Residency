@@ -294,7 +294,7 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
   };
 
   // Add Button Handler
-  const handleAdd = (e?: React.FormEvent) => {
+  const handleAdd = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
     if (!date) {
@@ -346,7 +346,7 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
     const normalizedPaid = (paid.trim() || 'NOT PAID').toUpperCase();
 
     // Insert record and recalculate balances chronologically
-    DatabaseService.insertWaterRecord(activeTable, {
+    await DatabaseService.insertWaterRecord(activeTable, {
       DATE: date,
       DAY: currentDay,
       CURRENT_READINGS: currentVal,
@@ -368,7 +368,7 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
   };
 
   // Update Button Handler
-  const handleUpdate = (e?: React.FormEvent) => {
+  const handleUpdate = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
     if (!selectedRecordId) {
@@ -423,7 +423,7 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
     const normalizedPaid = (paid.trim() || 'NOT PAID').toUpperCase();
 
     // Update and recalculate balances chronologically
-    DatabaseService.updateWaterRecord(activeTable, selectedRecordId, {
+    await DatabaseService.updateWaterRecord(activeTable, selectedRecordId, {
       DATE: date,
       DAY: currentDay,
       CURRENT_READINGS: currentVal,
@@ -443,7 +443,7 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
   };
 
   // Delete Button Handler
-  const handleDelete = (e?: React.FormEvent) => {
+  const handleDelete = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
     if (!selectedRecordId) {
@@ -454,7 +454,7 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
       return;
     }
 
-    DatabaseService.deleteWaterRecord(activeTable, selectedRecordId);
+    await DatabaseService.deleteWaterRecord(activeTable, selectedRecordId);
 
     setMessage({
       text: `Water record deleted and balances recalculated for [${activeTable}]!`,

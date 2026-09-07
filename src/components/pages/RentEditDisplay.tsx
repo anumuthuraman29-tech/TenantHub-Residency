@@ -194,7 +194,7 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
   };
 
   // Add Button Handler
-  const handleAdd = (e?: React.FormEvent) => {
+  const handleAdd = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!date) {
       setMessage({ text: 'Please select a valid Date.', isError: true });
@@ -215,7 +215,7 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
     const normalizedMode = modeOfPayment.trim() || 'UPI';
 
     // Insert and trigger chronological balance recalculation
-    DatabaseService.insertRentRecord(activeTable, {
+    await DatabaseService.insertRentRecord(activeTable, {
       DATE: date,
       DAY: currentDay,
       PAYMENT: payVal,
@@ -235,7 +235,7 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
   };
 
   // Update Button Handler
-  const handleUpdate = (e?: React.FormEvent) => {
+  const handleUpdate = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!selectedRecordId) {
       setMessage({
@@ -261,7 +261,7 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
     const normalizedMode = modeOfPayment.trim() || 'UPI';
 
     // Update and recalculate balances chronologically
-    DatabaseService.updateRentRecord(activeTable, selectedRecordId, {
+    await DatabaseService.updateRentRecord(activeTable, selectedRecordId, {
       DATE: date,
       DAY: currentDay,
       PAYMENT: payVal,
@@ -279,7 +279,7 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
   };
 
   // Delete Button Handler
-  const handleDelete = (e?: React.FormEvent) => {
+  const handleDelete = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!selectedRecordId) {
       setMessage({
@@ -289,7 +289,7 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
       return;
     }
 
-    DatabaseService.deleteRentRecord(activeTable, selectedRecordId);
+    await DatabaseService.deleteRentRecord(activeTable, selectedRecordId);
 
     setMessage({
       text: `Rent record deleted and synchronized with Supabase for [${activeTable}]!`,

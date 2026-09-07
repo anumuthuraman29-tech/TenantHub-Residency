@@ -13,6 +13,19 @@ import { SmsService } from './smsService';
 
 const STORAGE_KEY = 'TENANT_HUB_SQL_DB_V3';
 
+export function calculateDayOfWeek(dateStr: string): string {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return '';
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  if (isNaN(year) || isNaN(month) || isNaN(day)) return '';
+  const d = new Date(year, month, day);
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  return days[d.getDay()] || '';
+}
+
 export interface CustomerLoginRecord {
   id: number;
   USERNAME: string;
@@ -591,9 +604,15 @@ export class DatabaseService {
         db.adminUser.passwordHash = adminData[0].password_hash;
       }
 
-      // 2. Sync tenant passwords
+      // 2. Sync tenant passwords and customer logins
       const { data: logins } = await supabase.from('customer_logins').select('*');
       if (logins && logins.length > 0) {
+        db.customerLogins = logins.map((l: any) => ({
+          id: l.id,
+          USERNAME: l.tenant_number,
+          PASSWORD: l.password_hash,
+        }));
+        db.passwords = {};
         logins.forEach((l: any) => {
           db.passwords[l.tenant_number] = l.password_hash;
         });
@@ -602,33 +621,38 @@ export class DatabaseService {
       // 3. Sync tenant infos
       const { data: infos } = await supabase.from('tenant_infos').select('*');
       if (infos && infos.length > 0) {
+        const newInfoTables: Record<string, CustomerInfoRecord[]> = {};
+        for (const num of Object.keys(TENANT_TABLE_MAP)) {
+          newInfoTables[`INFO_${num}`] = [];
+        }
         infos.forEach((inf: any) => {
           const key = `INFO_${inf.tenant_number}`;
-          db.infoTables[key] = [
-            {
-              id: inf.id,
-              USERNAME: inf.tenant_number,
-              NAME: inf.name,
-              PHONE_NUMBER: inf.phone,
-              ARRIVED_DATE: inf.arrived_date || '',
-              ADVANCE_PAID: Number(inf.advance_paid) || 0,
-              CURRENT_RENT: Number(inf.current_rent) || 0,
-              CURRENT_INCREMENT: Number(inf.current_increment) || 0,
-              YEARLY_INCREMENT: Number(inf.yearly_increment) || 5,
-            },
-          ];
+          if (!newInfoTables[key]) newInfoTables[key] = [];
+          newInfoTables[key].push({
+            id: inf.id,
+            USERNAME: inf.tenant_number,
+            NAME: inf.name,
+            PHONE_NUMBER: inf.phone,
+            ARRIVED_DATE: inf.arrived_date || '',
+            ADVANCE_PAID: Number(inf.advance_paid) || 0,
+            CURRENT_RENT: Number(inf.current_rent) || 0,
+            CURRENT_INCREMENT: Number(inf.current_increment) || 0,
+            YEARLY_INCREMENT: Number(inf.yearly_increment) || 5,
+          });
         });
+        db.infoTables = newInfoTables;
       }
 
       // 4. Sync rent records
       const { data: rents } = await supabase.from('rent_records').select('*');
       if (rents && rents.length > 0) {
+        const newRentTables: Record<string, RentRecord[]> = {};
+        for (const t of this.ALLOWED_RENT_TABLES) {
+          newRentTables[t] = [];
+        }
         rents.forEach((r: any) => {
           const tName = r.table_name || `RENT_${r.tenant_number}`;
-          if (!db.rentTables[tName]) db.rentTables[tName] = [];
-          const existingIdx = db.rentTables[tName].findIndex(
-            (x) => String(x.id) === String(r.id) || x.DATE === r.date
-          );
+          if (!newRentTables[tName]) newRentTables[tName] = [];
           const paymentVal = Number(r.payment) || 0;
           const isPaidStatus = (r.paid || '').toUpperCase() === 'PAID';
           const balanceVal = isPaidStatus
@@ -651,56 +675,68 @@ export class DatabaseService {
           const formatted: RentRecord = {
             id: r.id,
             DATE: r.date,
-            DAY: r.day || '',
+            DAY: r.day || calculateDayOfWeek(r.date),
             PAYMENT: paymentVal,
             BALANCE: balanceVal,
             TOTAL: totalVal,
             PAID: (r.paid || 'NOT PAID').toUpperCase(),
-            'MODE OF PAYMENT': r.mode_of_payment || 'CASH',
+            'MODE OF PAYMENT': r.mode_of_payment || 'UPI',
           };
-          if (existingIdx !== -1) {
-            db.rentTables[tName][existingIdx] = formatted;
-          } else {
-            db.rentTables[tName].push(formatted);
-          }
+          newRentTables[tName].push(formatted);
         });
+
+        // Sort descending by date so index 0 is always the latest record
+        for (const tName of Object.keys(newRentTables)) {
+          newRentTables[tName].sort((a, b) => b.DATE.localeCompare(a.DATE));
+        }
+        db.rentTables = newRentTables;
       }
 
       // 5. Sync water records
       const { data: waters } = await supabase.from('water_records').select('*');
       if (waters && waters.length > 0) {
+        const newWaterTables: Record<string, WaterRecord[]> = {};
+        for (const t of this.ALLOWED_WATER_TABLES) {
+          newWaterTables[t] = [];
+        }
         waters.forEach((w: any) => {
           const tName = w.table_name || `Water_${w.tenant_number}`;
-          if (!db.waterTables[tName]) db.waterTables[tName] = [];
-          const existingIdx = db.waterTables[tName].findIndex(
-            (x) => String(x.id) === String(w.id) || x.DATE === w.date
-          );
+          if (!newWaterTables[tName]) newWaterTables[tName] = [];
           const isWaterPaidStatus = (w.paid || '').toUpperCase() === 'PAID';
           const balanceVal = isWaterPaidStatus ? 0 : Number(w.balance) || 0;
           const totalVal = isWaterPaidStatus ? 0 : Number(w.total) || 0;
           const formatted: WaterRecord = {
             id: w.id,
             DATE: w.date,
-            DAY: w.day || '',
-            PREVIOUS_READINGS: Number(w.previous_reading || w.previous_readings) || 0,
-            CURRENT_READINGS: Number(w.current_reading || w.current_readings) || 0,
+            DAY: w.day || calculateDayOfWeek(w.date),
+            PREVIOUS_READINGS: Number(w.previous_reading !== undefined ? w.previous_reading : w.previous_readings) || 0,
+            CURRENT_READINGS: Number(w.current_reading !== undefined ? w.current_reading : w.current_readings) || 0,
             KITCHEN: Number(w.kitchen) || 0,
             TOTAL_BILL: Number(w.total_bill) || 0,
             BALANCE: balanceVal,
             PAID: (w.paid || 'NOT PAID').toUpperCase(),
             TOTAL: totalVal,
           };
-          if (existingIdx !== -1) {
-            db.waterTables[tName][existingIdx] = formatted;
-          } else {
-            db.waterTables[tName].push(formatted);
-          }
+          newWaterTables[tName].push(formatted);
         });
+
+        // Sort descending by date so index 0 is always the latest record
+        for (const tName of Object.keys(newWaterTables)) {
+          newWaterTables[tName].sort((a, b) => b.DATE.localeCompare(a.DATE));
+        }
+        db.waterTables = newWaterTables;
+      }
+
+      // Auto-seed if both rent and water tables in Supabase are currently empty
+      if ((!rents || rents.length === 0) && (!waters || waters.length === 0)) {
+        console.log('[Supabase] Initializing database tables with seed data...');
+        await this.pushAllToSupabase();
+        return this.syncFromSupabase();
       }
 
       // 6. Sync payment submissions
       const { data: submissions } = await supabase.from('payment_submissions').select('*');
-      if (submissions && submissions.length > 0) {
+      if (submissions) {
         db.paymentSubmissions = submissions.map((s: any) => ({
           id: s.id,
           tenantNumber: s.tenant_number,
@@ -711,7 +747,7 @@ export class DatabaseService {
           notes: s.notes || '',
           timestamp: s.created_at || new Date().toISOString(),
           status: s.status || 'PENDING',
-        }));
+        })).sort((a: any, b: any) => (new Date(b.timestamp).getTime() || 0) - (new Date(a.timestamp).getTime() || 0));
       }
 
       this.saveDB(db);
@@ -918,69 +954,112 @@ export class DatabaseService {
     }
   }
 
-  public static insertRentRecord(tenantNumber: string, record: Omit<RentRecord, 'id'>) {
+  public static async insertRentRecord(tenantNumber: string, record: Omit<RentRecord, 'id'>): Promise<RentRecord[]> {
     const validTable = this.sanitizeRentTableName(tenantNumber);
+    const tenantNum = validTable.replace('RENT_', '');
+    const newId = `${validTable}_${Date.now()}_${record.DATE}`;
+    const payVal = Number(record.PAYMENT) || 0;
+    const isPaidStatus = (record.PAID || '').toUpperCase() === 'PAID';
+    const balanceVal = isPaidStatus ? 0 : (Number(record.BALANCE) || 0);
+
+    if (isSupabaseConfigured() && supabase) {
+      const row = {
+        id: newId,
+        table_name: validTable,
+        tenant_number: tenantNum,
+        date: record.DATE,
+        day: record.DAY || calculateDayOfWeek(record.DATE),
+        previous_balance: balanceVal,
+        payment: payVal,
+        unpaid: isPaidStatus ? 0 : balanceVal,
+        paid: (record.PAID || 'NOT PAID').toUpperCase(),
+        mode_of_payment: record['MODE OF PAYMENT'] || 'UPI',
+      };
+      const { error } = await supabase.from('rent_records').insert([row]);
+      if (error) {
+        console.error('Supabase insertRentRecord error:', error);
+        throw new Error(error.message);
+      }
+      await this.syncFromSupabase();
+      return this.getRentRecordsByTable(validTable);
+    }
+
+    // Fallback if Supabase not configured
     const db = this.getDB();
     if (!db.rentTables[validTable]) db.rentTables[validTable] = [];
-    const newId = `rent_${tenantNumber.replace('RENT_', '')}_${Date.now()}`;
     db.rentTables[validTable].push({ ...record, id: newId });
     this.saveDB(db);
-    const updated = this.recalculateRentTable(validTable);
-
-    // Live push to Supabase
-    this.pushRentRecordsToSupabase(validTable).catch((err) =>
-      console.error('Supabase auto-sync failed on insertRentRecord:', err)
-    );
-
-    return updated;
+    return this.recalculateRentTable(validTable);
   }
 
-  public static updateRentRecord(tenantNumber: string, idOrDate: string | number, record: Partial<RentRecord>) {
+  public static async updateRentRecord(
+    tenantNumber: string,
+    idOrDate: string | number,
+    record: Partial<RentRecord>
+  ): Promise<RentRecord[]> {
     const validTable = this.sanitizeRentTableName(tenantNumber);
     const db = this.getDB();
     const list = db.rentTables[validTable] || [];
+    const currentItem = list.find((r) => String(r.id) === String(idOrDate) || r.DATE === String(idOrDate));
+    const targetId = currentItem?.id || String(idOrDate);
+
+    if (isSupabaseConfigured() && supabase) {
+      const updatePayload: Record<string, any> = {};
+      if (record.DATE !== undefined) updatePayload.date = record.DATE;
+      if (record.DAY !== undefined) updatePayload.day = record.DAY;
+      if (record.PAYMENT !== undefined) updatePayload.payment = Number(record.PAYMENT) || 0;
+      if (record.BALANCE !== undefined) updatePayload.previous_balance = Number(record.BALANCE) || 0;
+      if (record.PAID !== undefined) {
+        const isPaidStatus = (record.PAID || '').toUpperCase() === 'PAID';
+        updatePayload.paid = (record.PAID || 'NOT PAID').toUpperCase();
+        updatePayload.unpaid = isPaidStatus ? 0 : (Number(record.BALANCE) || 0);
+      }
+      if (record['MODE OF PAYMENT'] !== undefined) updatePayload.mode_of_payment = record['MODE OF PAYMENT'];
+
+      const { error } = await supabase.from('rent_records').update(updatePayload).eq('id', String(targetId));
+      if (error) {
+        console.error('Supabase updateRentRecord error:', error);
+        throw new Error(error.message);
+      }
+      await this.syncFromSupabase();
+      return this.getRentRecordsByTable(validTable);
+    }
+
+    // Fallback
     const idx = list.findIndex((r) => String(r.id) === String(idOrDate) || r.DATE === String(idOrDate));
     if (idx !== -1) {
       list[idx] = { ...list[idx], ...record };
       this.saveDB(db);
     }
-    const updated = this.recalculateRentTable(validTable);
-
-    // Live push to Supabase
-    this.pushRentRecordsToSupabase(validTable).catch((err) =>
-      console.error('Supabase auto-sync failed on updateRentRecord:', err)
-    );
-
-    return updated;
+    return this.recalculateRentTable(validTable);
   }
 
-  public static deleteRentRecord(tenantNumber: string, idOrDate: string | number) {
+  public static async deleteRentRecord(
+    tenantNumber: string,
+    idOrDate: string | number
+  ): Promise<RentRecord[]> {
     const validTable = this.sanitizeRentTableName(tenantNumber);
     const db = this.getDB();
-    if (db.rentTables[validTable]) {
-      const deletedItem = db.rentTables[validTable].find(
-        (r) => String(r.id) === String(idOrDate) || r.DATE === String(idOrDate)
-      );
+    const list = db.rentTables[validTable] || [];
+    const currentItem = list.find((r) => String(r.id) === String(idOrDate) || r.DATE === String(idOrDate));
+    const targetId = currentItem?.id || String(idOrDate);
 
+    if (isSupabaseConfigured() && supabase) {
+      const { error } = await supabase.from('rent_records').delete().eq('id', String(targetId));
+      if (error) {
+        console.error('Supabase deleteRentRecord error:', error);
+        throw new Error(error.message);
+      }
+      await this.syncFromSupabase();
+      return this.getRentRecordsByTable(validTable);
+    }
+
+    // Fallback
+    if (db.rentTables[validTable]) {
       db.rentTables[validTable] = db.rentTables[validTable].filter(
         (r) => String(r.id) !== String(idOrDate) && r.DATE !== String(idOrDate)
       );
       this.saveDB(db);
-
-      // Live delete from Supabase, then sync remaining
-      if (deletedItem && isSupabaseConfigured() && supabase) {
-        (async () => {
-          try {
-            await supabase
-              .from('rent_records')
-              .delete()
-              .eq('id', String(deletedItem.id));
-            this.pushRentRecordsToSupabase(validTable);
-          } catch (err) {
-            console.error('Supabase delete rent record error:', err);
-          }
-        })();
-      }
     }
     return this.recalculateRentTable(validTable);
   }
@@ -1175,69 +1254,123 @@ export class DatabaseService {
     };
   }
 
-  public static insertWaterRecord(tenantNumber: string, record: Omit<WaterRecord, 'id'>) {
+  public static async insertWaterRecord(tenantNumber: string, record: Omit<WaterRecord, 'id'>): Promise<WaterRecord[]> {
     const validTable = this.sanitizeWaterTableName(tenantNumber);
+    const tenantNum = validTable.replace('Water_', '');
+    const newId = `${validTable}_${Date.now()}_${record.DATE}`;
+    const prevReading = Number(record.PREVIOUS_READINGS) || 0;
+    const currReading = Number(record.CURRENT_READINGS) || 0;
+    const units = Math.abs((currReading - prevReading) * 10);
+    const totalBill = Number(record.TOTAL_BILL) || 0;
+    const isPaidStatus = (record.PAID || '').toUpperCase() === 'PAID';
+    const balance = isPaidStatus ? 0 : (Number(record.BALANCE) || 0);
+    const total = isPaidStatus ? 0 : (Number(record.TOTAL) || (totalBill + balance));
+
+    if (isSupabaseConfigured() && supabase) {
+      const row = {
+        id: newId,
+        table_name: validTable,
+        tenant_number: tenantNum,
+        date: record.DATE,
+        day: record.DAY || calculateDayOfWeek(record.DATE),
+        previous_reading: prevReading,
+        current_reading: currReading,
+        units: units,
+        cost_per_unit: 10,
+        total_bill: totalBill,
+        balance: balance,
+        paid: (record.PAID || 'NOT PAID').toUpperCase(),
+        total: total,
+      };
+      const { error } = await supabase.from('water_records').insert([row]);
+      if (error) {
+        console.error('Supabase insertWaterRecord error:', error);
+        throw new Error(error.message);
+      }
+      await this.syncFromSupabase();
+      return this.getWaterRecordsByTable(validTable);
+    }
+
+    // Fallback
     const db = this.getDB();
     if (!db.waterTables[validTable]) db.waterTables[validTable] = [];
-    const newId = `water_${tenantNumber.replace('Water_', '')}_${Date.now()}`;
     db.waterTables[validTable].push({ ...record, id: newId });
     this.saveDB(db);
-    const updated = this.recalculateWaterTable(validTable);
-
-    // Live push to Supabase
-    this.pushWaterRecordsToSupabase(validTable).catch((err) =>
-      console.error('Supabase auto-sync failed on insertWaterRecord:', err)
-    );
-
-    return updated;
+    return this.recalculateWaterTable(validTable);
   }
 
-  public static updateWaterRecord(tenantNumber: string, idOrDate: string | number, record: Partial<WaterRecord>) {
+  public static async updateWaterRecord(
+    tenantNumber: string,
+    idOrDate: string | number,
+    record: Partial<WaterRecord>
+  ): Promise<WaterRecord[]> {
     const validTable = this.sanitizeWaterTableName(tenantNumber);
     const db = this.getDB();
     const list = db.waterTables[validTable] || [];
+    const currentItem = list.find((r) => String(r.id) === String(idOrDate) || r.DATE === String(idOrDate));
+    const targetId = currentItem?.id || String(idOrDate);
+
+    if (isSupabaseConfigured() && supabase) {
+      const updatePayload: Record<string, any> = {};
+      if (record.DATE !== undefined) updatePayload.date = record.DATE;
+      if (record.DAY !== undefined) updatePayload.day = record.DAY;
+      if (record.PREVIOUS_READINGS !== undefined) updatePayload.previous_reading = Number(record.PREVIOUS_READINGS) || 0;
+      if (record.CURRENT_READINGS !== undefined) updatePayload.current_reading = Number(record.CURRENT_READINGS) || 0;
+      if (record.TOTAL_BILL !== undefined) updatePayload.total_bill = Number(record.TOTAL_BILL) || 0;
+      if (record.BALANCE !== undefined) updatePayload.balance = Number(record.BALANCE) || 0;
+      if (record.PAID !== undefined) {
+        updatePayload.paid = (record.PAID || 'NOT PAID').toUpperCase();
+        if ((record.PAID || '').toUpperCase() === 'PAID') {
+          updatePayload.balance = 0;
+          updatePayload.total = 0;
+        }
+      }
+      if (record.TOTAL !== undefined) updatePayload.total = Number(record.TOTAL) || 0;
+
+      const { error } = await supabase.from('water_records').update(updatePayload).eq('id', String(targetId));
+      if (error) {
+        console.error('Supabase updateWaterRecord error:', error);
+        throw new Error(error.message);
+      }
+      await this.syncFromSupabase();
+      return this.getWaterRecordsByTable(validTable);
+    }
+
+    // Fallback
     const idx = list.findIndex((r) => String(r.id) === String(idOrDate) || r.DATE === String(idOrDate));
     if (idx !== -1) {
       list[idx] = { ...list[idx], ...record };
       this.saveDB(db);
     }
-    const updated = this.recalculateWaterTable(validTable);
-
-    // Live push to Supabase
-    this.pushWaterRecordsToSupabase(validTable).catch((err) =>
-      console.error('Supabase auto-sync failed on updateWaterRecord:', err)
-    );
-
-    return updated;
+    return this.recalculateWaterTable(validTable);
   }
 
-  public static deleteWaterRecord(tenantNumber: string, idOrDate: string | number) {
+  public static async deleteWaterRecord(
+    tenantNumber: string,
+    idOrDate: string | number
+  ): Promise<WaterRecord[]> {
     const validTable = this.sanitizeWaterTableName(tenantNumber);
     const db = this.getDB();
-    if (db.waterTables[validTable]) {
-      const deletedItem = db.waterTables[validTable].find(
-        (r) => String(r.id) === String(idOrDate) || r.DATE === String(idOrDate)
-      );
+    const list = db.waterTables[validTable] || [];
+    const currentItem = list.find((r) => String(r.id) === String(idOrDate) || r.DATE === String(idOrDate));
+    const targetId = currentItem?.id || String(idOrDate);
 
+    if (isSupabaseConfigured() && supabase) {
+      const { error } = await supabase.from('water_records').delete().eq('id', String(targetId));
+      if (error) {
+        console.error('Supabase deleteWaterRecord error:', error);
+        throw new Error(error.message);
+      }
+      await this.syncFromSupabase();
+      return this.getWaterRecordsByTable(validTable);
+    }
+
+    // Fallback
+    if (db.waterTables[validTable]) {
       db.waterTables[validTable] = db.waterTables[validTable].filter(
         (r) => String(r.id) !== String(idOrDate) && r.DATE !== String(idOrDate)
       );
       this.saveDB(db);
-
-      // Live delete from Supabase, then sync remaining
-      if (deletedItem && isSupabaseConfigured() && supabase) {
-        (async () => {
-          try {
-            await supabase
-              .from('water_records')
-              .delete()
-              .eq('id', String(deletedItem.id));
-            this.pushWaterRecordsToSupabase(validTable);
-          } catch (err) {
-            console.error('Supabase delete water record error:', err);
-          }
-        })();
-      }
     }
     return this.recalculateWaterTable(validTable);
   }
@@ -1254,35 +1387,87 @@ export class DatabaseService {
     return list.length > 0 ? list[0] : null;
   }
 
-  public static insertInfoRecord(tenantNumber: string, record: Omit<CustomerInfoRecord, 'id'>) {
+  public static async insertInfoRecord(tenantNumber: string, record: Omit<CustomerInfoRecord, 'id'>) {
     const infoKey = `INFO_${tenantNumber}`;
+    const cleanNum = tenantNumber.replace('INFO_', '');
+
+    if (isSupabaseConfigured() && supabase) {
+      const row = {
+        tenant_number: cleanNum,
+        name: record.NAME,
+        phone: record.PHONE_NUMBER,
+        arrived_date: record.ARRIVED_DATE || '',
+        advance_paid: Number(record.ADVANCE_PAID) || 0,
+        current_rent: Number(record.CURRENT_RENT) || 0,
+        current_increment: Number(record.CURRENT_INCREMENT) || 0,
+        yearly_increment: Number(record.YEARLY_INCREMENT) || 5,
+      };
+      const { error } = await supabase.from('tenant_infos').upsert([row], { onConflict: 'tenant_number' });
+      if (error) {
+        console.error('Supabase insertInfoRecord error:', error);
+        throw new Error(error.message);
+      }
+      await this.syncFromSupabase();
+      return;
+    }
+
     const db = this.getDB();
     if (!db.infoTables[infoKey]) db.infoTables[infoKey] = [];
     const newId = Date.now();
     db.infoTables[infoKey].unshift({ ...record, id: newId });
     this.saveDB(db);
-    this.pushTenantInfosToSupabase().catch(() => {});
   }
 
-  public static updateInfoRecord(tenantNumber: string, id: string | number, record: Partial<CustomerInfoRecord>) {
+  public static async updateInfoRecord(tenantNumber: string, id: string | number, record: Partial<CustomerInfoRecord>) {
     const infoKey = `INFO_${tenantNumber}`;
+    const cleanNum = tenantNumber.replace('INFO_', '');
+
+    if (isSupabaseConfigured() && supabase) {
+      const updatePayload: Record<string, any> = {};
+      if (record.NAME !== undefined) updatePayload.name = record.NAME;
+      if (record.PHONE_NUMBER !== undefined) updatePayload.phone = record.PHONE_NUMBER;
+      if (record.ARRIVED_DATE !== undefined) updatePayload.arrived_date = record.ARRIVED_DATE;
+      if (record.ADVANCE_PAID !== undefined) updatePayload.advance_paid = Number(record.ADVANCE_PAID) || 0;
+      if (record.CURRENT_RENT !== undefined) updatePayload.current_rent = Number(record.CURRENT_RENT) || 0;
+      if (record.CURRENT_INCREMENT !== undefined) updatePayload.current_increment = Number(record.CURRENT_INCREMENT) || 0;
+      if (record.YEARLY_INCREMENT !== undefined) updatePayload.yearly_increment = Number(record.YEARLY_INCREMENT) || 5;
+
+      const { error } = await supabase.from('tenant_infos').update(updatePayload).eq('tenant_number', cleanNum);
+      if (error) {
+        console.error('Supabase updateInfoRecord error:', error);
+        throw new Error(error.message);
+      }
+      await this.syncFromSupabase();
+      return;
+    }
+
     const db = this.getDB();
     const list = db.infoTables[infoKey] || [];
     const idx = list.findIndex((r) => String(r.id) === String(id));
     if (idx !== -1) {
       list[idx] = { ...list[idx], ...record };
       this.saveDB(db);
-      this.pushTenantInfosToSupabase().catch(() => {});
     }
   }
 
-  public static deleteInfoRecord(tenantNumber: string, id: string | number) {
+  public static async deleteInfoRecord(tenantNumber: string, id: string | number) {
     const infoKey = `INFO_${tenantNumber}`;
+    const cleanNum = tenantNumber.replace('INFO_', '');
+
+    if (isSupabaseConfigured() && supabase) {
+      const { error } = await supabase.from('tenant_infos').delete().eq('tenant_number', cleanNum);
+      if (error) {
+        console.error('Supabase deleteInfoRecord error:', error);
+        throw new Error(error.message);
+      }
+      await this.syncFromSupabase();
+      return;
+    }
+
     const db = this.getDB();
     if (db.infoTables[infoKey]) {
       db.infoTables[infoKey] = db.infoTables[infoKey].filter((r) => String(r.id) !== String(id));
       this.saveDB(db);
-      this.pushTenantInfosToSupabase().catch(() => {});
     }
   }
 
@@ -1350,7 +1535,19 @@ export class DatabaseService {
     return db.customerLogins || [];
   }
 
-  public static insertCustomerLogin(username: string, password: string) {
+  public static async insertCustomerLogin(username: string, password: string) {
+    if (isSupabaseConfigured() && supabase) {
+      const { error } = await supabase
+        .from('customer_logins')
+        .upsert([{ tenant_number: username, password_hash: password }], { onConflict: 'tenant_number' });
+      if (error) {
+        console.error('Supabase insertCustomerLogin error:', error);
+        throw new Error(error.message);
+      }
+      await this.syncFromSupabase();
+      return;
+    }
+
     const db = this.getDB();
     const newId = Date.now();
     db.customerLogins.push({ id: newId, USERNAME: username, PASSWORD: password });
@@ -1358,7 +1555,20 @@ export class DatabaseService {
     this.saveDB(db);
   }
 
-  public static updateCustomerLogin(id: number, username: string, password: string) {
+  public static async updateCustomerLogin(id: number, username: string, password: string) {
+    if (isSupabaseConfigured() && supabase) {
+      const { error } = await supabase
+        .from('customer_logins')
+        .update({ password_hash: password })
+        .eq('id', id);
+      if (error) {
+        console.error('Supabase updateCustomerLogin error:', error);
+        throw new Error(error.message);
+      }
+      await this.syncFromSupabase();
+      return;
+    }
+
     const db = this.getDB();
     const idx = db.customerLogins.findIndex((c) => c.id === id);
     if (idx !== -1) {
@@ -1369,7 +1579,17 @@ export class DatabaseService {
     }
   }
 
-  public static deleteCustomerLogin(id: number) {
+  public static async deleteCustomerLogin(id: number) {
+    if (isSupabaseConfigured() && supabase) {
+      const { error } = await supabase.from('customer_logins').delete().eq('id', id);
+      if (error) {
+        console.error('Supabase deleteCustomerLogin error:', error);
+        throw new Error(error.message);
+      }
+      await this.syncFromSupabase();
+      return;
+    }
+
     const db = this.getDB();
     const target = db.customerLogins.find((c) => c.id === id);
     if (target) {
@@ -1385,19 +1605,51 @@ export class DatabaseService {
     return db.paymentSubmissions || [];
   }
 
-  public static submitPaymentProof(
+  public static async submitPaymentProof(
     tenantNumber: string,
     amount: number,
     utrNumber: string,
     paymentMode: string = 'PhonePe UPI',
     notes?: string
-  ): PaymentSubmission {
-    const db = this.getDB();
+  ): Promise<PaymentSubmission> {
+    const newId = `PAY-${Date.now().toString().slice(-6)}`;
     const tenantInfo = TENANT_TABLE_MAP[tenantNumber];
+    const tenantName = tenantInfo ? tenantInfo.tenantName : `Tenant ${tenantNumber}`;
+
+    if (isSupabaseConfigured() && supabase) {
+      const row = {
+        id: newId,
+        tenant_number: tenantNumber,
+        amount: Number(amount) || 0,
+        utr_number: utrNumber.trim(),
+        payment_mode: paymentMode,
+        notes: notes || `Payment submitted via ${paymentMode}`,
+        status: 'PENDING',
+      };
+      const { error } = await supabase.from('payment_submissions').insert([row]);
+      if (error) {
+        console.error('Supabase submitPaymentProof error:', error);
+        throw new Error(error.message);
+      }
+      await this.syncFromSupabase();
+      return {
+        id: newId,
+        tenantNumber,
+        tenantName,
+        amount,
+        utrNumber: utrNumber.trim(),
+        paymentMode,
+        timestamp: new Date().toLocaleString(),
+        status: 'PENDING',
+        notes: notes || `Payment submitted via ${paymentMode}`,
+      };
+    }
+
+    const db = this.getDB();
     const newSubmission: PaymentSubmission = {
-      id: `PAY-${Date.now().toString().slice(-6)}`,
+      id: newId,
       tenantNumber,
-      tenantName: tenantInfo ? tenantInfo.tenantName : `Tenant ${tenantNumber}`,
+      tenantName,
       amount,
       utrNumber: utrNumber.trim(),
       paymentMode,
@@ -1410,68 +1662,52 @@ export class DatabaseService {
     return newSubmission;
   }
 
-  public static approvePayment(submissionId: string) {
+  public static async approvePayment(submissionId: string): Promise<void> {
     const db = this.getDB();
     const sub = db.paymentSubmissions.find((s) => s.id === submissionId);
     if (!sub) return;
 
-    sub.status = 'VERIFIED';
-
-    // Mark latest Rent and Water as PAID and balance to 0
     const tenantNum = sub.tenantNumber;
-    const info = TENANT_TABLE_MAP[tenantNum];
-    if (info) {
-      const rentList = db.rentTables[info.rentTable];
-      if (rentList && rentList.length > 0) {
-        rentList[0].PAID = 'PAID';
-        rentList[0].BALANCE = 0;
-        rentList[0].TOTAL = 0;
-        rentList[0]['MODE OF PAYMENT'] = sub.paymentMode;
-      }
-      const waterList = db.waterTables[info.waterTable];
-      if (waterList && waterList.length > 0) {
-        waterList[0].PAID = 'PAID';
-        waterList[0].BALANCE = 0;
-        waterList[0].TOTAL = 0;
-      }
 
-      // Live push updated tables to Supabase
-      this.pushRentRecordsToSupabase(info.rentTable).catch((err) =>
-        console.error('Failed to sync rent to Supabase on approval:', err)
-      );
-      this.pushWaterRecordsToSupabase(info.waterTable).catch((err) =>
-        console.error('Failed to sync water to Supabase on approval:', err)
-      );
-    }
-
-    this.saveDB(db);
-
-    // Update payment_submissions in Supabase
     if (isSupabaseConfigured() && supabase) {
-      supabase
+      const { error: subErr } = await supabase
         .from('payment_submissions')
         .update({ status: 'VERIFIED' })
-        .eq('id', submissionId)
-        .then(({ error }) => {
-          if (error) console.warn('Supabase payment status update notice:', error.message);
-        });
+        .eq('id', submissionId);
+      if (subErr) console.warn('Supabase approve payment status warning:', subErr.message);
 
-      // Explicitly ensure Supabase rent_records and water_records reflect PAID status and 0 balance
-      supabase
+      const { error: rentErr } = await supabase
         .from('rent_records')
         .update({ paid: 'PAID', unpaid: 0, previous_balance: 0 })
-        .eq('tenant_number', tenantNum)
-        .then(({ error }) => {
-          if (error) console.warn('Supabase rent_records update notice on approval:', error.message);
-        });
+        .eq('tenant_number', tenantNum);
+      if (rentErr) console.warn('Supabase rent approval warning:', rentErr.message);
 
-      supabase
+      const { error: waterErr } = await supabase
         .from('water_records')
         .update({ paid: 'PAID', balance: 0, total: 0 })
-        .eq('tenant_number', tenantNum)
-        .then(({ error }) => {
-          if (error) console.warn('Supabase water_records update notice on approval:', error.message);
-        });
+        .eq('tenant_number', tenantNum);
+      if (waterErr) console.warn('Supabase water approval warning:', waterErr.message);
+
+      await this.syncFromSupabase();
+    } else {
+      sub.status = 'VERIFIED';
+      const info = TENANT_TABLE_MAP[tenantNum];
+      if (info) {
+        const rentList = db.rentTables[info.rentTable];
+        if (rentList && rentList.length > 0) {
+          rentList[0].PAID = 'PAID';
+          rentList[0].BALANCE = 0;
+          rentList[0].TOTAL = 0;
+          rentList[0]['MODE OF PAYMENT'] = sub.paymentMode;
+        }
+        const waterList = db.waterTables[info.waterTable];
+        if (waterList && waterList.length > 0) {
+          waterList[0].PAID = 'PAID';
+          waterList[0].BALANCE = 0;
+          waterList[0].TOTAL = 0;
+        }
+      }
+      this.saveDB(db);
     }
 
     // Add In-App Notification for Tenant
@@ -1493,23 +1729,21 @@ export class DatabaseService {
     }
   }
 
-  public static rejectPayment(submissionId: string, reason?: string) {
+  public static async rejectPayment(submissionId: string, reason?: string): Promise<void> {
     const db = this.getDB();
     const sub = db.paymentSubmissions.find((s) => s.id === submissionId);
     if (!sub) return;
 
-    sub.status = 'REJECTED';
-    this.saveDB(db);
-
-    // Update payment_submissions in Supabase
     if (isSupabaseConfigured() && supabase) {
-      supabase
+      const { error } = await supabase
         .from('payment_submissions')
         .update({ status: 'REJECTED' })
-        .eq('id', submissionId)
-        .then(({ error }) => {
-          if (error) console.warn('Supabase payment status update notice:', error.message);
-        });
+        .eq('id', submissionId);
+      if (error) console.warn('Supabase reject payment status warning:', error.message);
+      await this.syncFromSupabase();
+    } else {
+      sub.status = 'REJECTED';
+      this.saveDB(db);
     }
 
     // Add In-App Notification for Tenant
@@ -1550,13 +1784,38 @@ export class DatabaseService {
     return pass === expectedPass;
   }
 
-  public static updateTenantPassword(tenantNum: string, newPass: string) {
+  public static async updateTenantPassword(tenantNum: string, newPass: string) {
+    if (isSupabaseConfigured() && supabase) {
+      const { error } = await supabase
+        .from('customer_logins')
+        .upsert([{ tenant_number: tenantNum, password_hash: newPass }], { onConflict: 'tenant_number' });
+      if (error) console.error('Supabase updateTenantPassword error:', error);
+      await this.syncFromSupabase();
+      return;
+    }
+
     const db = this.getDB();
     db.passwords[tenantNum] = newPass;
     const loginRec = db.customerLogins.find((c) => c.USERNAME === tenantNum);
     if (loginRec) {
       loginRec.PASSWORD = newPass;
     }
+    this.saveDB(db);
+  }
+
+  public static async updateAdminPassword(newPass: string) {
+    const db = this.getDB();
+    if (isSupabaseConfigured() && supabase) {
+      const { error } = await supabase
+        .from('admin_users')
+        .update({ password_hash: newPass })
+        .eq('username', db.adminUser.username);
+      if (error) console.error('Supabase updateAdminPassword error:', error);
+      await this.syncFromSupabase();
+      return;
+    }
+
+    db.adminUser.passwordHash = newPass;
     this.saveDB(db);
   }
 

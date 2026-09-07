@@ -18,6 +18,7 @@ export const PaymentPageDisplay: React.FC<PaymentPageDisplayProps> = ({
   useEffect(() => {
     const handleUpdate = () => setTick((t) => t + 1);
     window.addEventListener('tenant_hub_db_updated', handleUpdate);
+    DatabaseService.syncFromSupabase().catch(() => {});
     return () => window.removeEventListener('tenant_hub_db_updated', handleUpdate);
   }, []);
 
