@@ -15,9 +15,13 @@ import {
   Phone,
   Building2,
   FileText,
+  Cloud,
+  HardDrive,
 } from 'lucide-react';
 import { DatabaseService } from '../../services/dbStore';
 import { ThemePalette } from '../ThemePalette';
+import { isSupabaseConfigured } from '../../services/supabaseClient';
+import { SupabaseConfigModal } from '../common/SupabaseConfigModal';
 
 export interface AdminNavBarProps {
   currentPage: string;
@@ -33,6 +37,22 @@ export const AdminNavBar: React.FC<AdminNavBarProps> = ({
   children,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isCloudModalOpen, setIsCloudModalOpen] = useState(false);
+  const [isCloudConfigured, setIsCloudConfigured] = useState<boolean>(() => isSupabaseConfigured());
+
+  useEffect(() => {
+    const handleConfigChange = (e: Event) => {
+      const custom = e as CustomEvent<{ isConfigured: boolean }>;
+      if (custom.detail !== undefined) {
+        setIsCloudConfigured(custom.detail.isConfigured);
+      } else {
+        setIsCloudConfigured(isSupabaseConfigured());
+      }
+    };
+    window.addEventListener('tenant_hub_supabase_config_changed', handleConfigChange);
+    return () => window.removeEventListener('tenant_hub_supabase_config_changed', handleConfigChange);
+  }, []);
+
   const [counts, setCounts] = useState({
     pendingPayments: 0,
     openComplaints: 0,
@@ -176,6 +196,32 @@ export const AdminNavBar: React.FC<AdminNavBarProps> = ({
           </div>
         </div>
 
+        {/* Storage Mode Status Button */}
+        <button
+          type="button"
+          onClick={() => setIsCloudModalOpen(true)}
+          className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 transition cursor-pointer text-left"
+          title="Manage Database & Cloud Sync Settings"
+        >
+          <div className="flex items-center gap-2">
+            {isCloudConfigured ? (
+              <Cloud className="w-3.5 h-3.5 text-emerald-400" />
+            ) : (
+              <HardDrive className="w-3.5 h-3.5 text-teal-400" />
+            )}
+            <span className="text-[11px] font-semibold text-slate-300">Storage</span>
+          </div>
+          <span
+            className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+              isCloudConfigured
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                : 'bg-teal-500/15 text-teal-300 border border-teal-500/30'
+            }`}
+          >
+            {isCloudConfigured ? 'Supabase' : 'Local Mode'}
+          </span>
+        </button>
+
         <div className="pt-1">
           <ThemePalette className="w-full mb-1" />
         </div>
@@ -293,6 +339,10 @@ export const AdminNavBar: React.FC<AdminNavBarProps> = ({
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
           {children}
         </main>
+        <SupabaseConfigModal
+          isOpen={isCloudModalOpen}
+          onClose={() => setIsCloudModalOpen(false)}
+        />
       </div>
     );
   }
@@ -303,6 +353,10 @@ export const AdminNavBar: React.FC<AdminNavBarProps> = ({
       {sidebarDrawer}
       {mobileTopBar}
       {mobileDrawer}
+      <SupabaseConfigModal
+        isOpen={isCloudModalOpen}
+        onClose={() => setIsCloudModalOpen(false)}
+      />
     </>
   );
 };

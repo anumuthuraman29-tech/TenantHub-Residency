@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { DatabaseService } from '../../services/dbStore';
 import { RentRecord } from '../../types';
-import { Cloud, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Cloud, RefreshCw, CheckCircle2, HardDrive, Settings2, X as CloseIcon } from 'lucide-react';
 import { RefreshDataButton } from '../common/RefreshDataButton';
+import { isSupabaseConfigured } from '../../services/supabaseClient';
+import { SupabaseConfigModal } from '../common/SupabaseConfigModal';
 
 interface RentEditDisplayProps {
   initialTenantNumber?: string;
@@ -96,19 +98,43 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
   const [message, setMessage] = useState<{ text: string; isError?: boolean } | null>(null);
   const [isSyncingSupabase, setIsSyncingSupabase] = useState<boolean>(false);
   const [isAdding, setIsAdding] = useState<boolean>(false);
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState<boolean>(false);
+  const [isCloudConfigured, setIsCloudConfigured] = useState<boolean>(() => isSupabaseConfigured());
+
+  useEffect(() => {
+    const handleConfigChange = (e: Event) => {
+      const custom = e as CustomEvent<{ isConfigured: boolean }>;
+      if (custom.detail !== undefined) {
+        setIsCloudConfigured(custom.detail.isConfigured);
+      } else {
+        setIsCloudConfigured(isSupabaseConfigured());
+      }
+    };
+    window.addEventListener('tenant_hub_supabase_config_changed', handleConfigChange);
+    return () => window.removeEventListener('tenant_hub_supabase_config_changed', handleConfigChange);
+  }, []);
 
   const handleSyncSupabase = async () => {
+    if (!isSupabaseConfigured()) {
+      setIsConfigModalOpen(true);
+      setMessage({
+        text: 'Notice: Supabase cloud is not configured. Tenant Hub is operating smoothly in Local Storage mode (all rent records are saved locally in your browser). You can configure cloud sync below or continue using local storage.',
+        isError: false,
+      });
+      return;
+    }
+
     setIsSyncingSupabase(true);
     try {
       const result = await DatabaseService.pushAllToSupabase();
       if (result.success) {
         setMessage({
-          text: `Direct sync complete! Synced ${result.rentCount} rent records and ${result.waterCount} water records directly to Supabase.`,
+          text: `Direct sync complete! Synced ${result.rentCount} rent records and ${result.waterCount} water records directly to Supabase cloud.`,
           isError: false,
         });
       } else {
         setMessage({
-          text: `Supabase sync alert: ${result.error || 'Check network connection'}`,
+          text: `Supabase cloud sync info: ${result.error || 'Check network connection'}. Local records remain safe and intact.`,
           isError: true,
         });
       }
@@ -485,15 +511,34 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
               type="button"
               onClick={handleSyncSupabase}
               disabled={isSyncingSupabase}
-              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-400/40 text-emerald-100 text-xs sm:text-sm font-bold transition-all shadow-md active:scale-95 disabled:opacity-50 cursor-pointer min-h-[42px] whitespace-nowrap"
-              title="Sync all local records directly to Supabase cloud database"
+              className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm font-bold transition-all shadow-md active:scale-95 disabled:opacity-50 cursor-pointer min-h-[42px] whitespace-nowrap ${
+                isCloudConfigured
+                  ? 'bg-emerald-600/30 hover:bg-emerald-600/50 border-emerald-400/40 text-emerald-100'
+                  : 'bg-teal-950/60 hover:bg-teal-900/60 border-teal-500/40 text-teal-200'
+              }`}
+              title={
+                isCloudConfigured
+                  ? 'Connected to Supabase cloud. Click to sync all local records.'
+                  : 'Currently in Local Storage mode. Click to configure cloud sync or view settings.'
+              }
             >
               {isSyncingSupabase ? (
                 <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
-              ) : (
+              ) : isCloudConfigured ? (
                 <Cloud className="w-4 h-4 text-emerald-300 shrink-0" />
+              ) : (
+                <HardDrive className="w-4 h-4 text-teal-400 shrink-0" />
               )}
-              <span>{isSyncingSupabase ? 'Syncing...' : 'Sync Supabase'}</span>
+              <span>{isSyncingSupabase ? 'Syncing...' : isCloudConfigured ? 'Sync Cloud' : 'Cloud Sync'}</span>
+              <span
+                className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-semibold ${
+                  isCloudConfigured
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                    : 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
+                }`}
+              >
+                {isCloudConfigured ? 'Connected' : 'Local Mode'}
+              </span>
             </button>
 
             <button
@@ -541,13 +586,32 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
         {message && (
           <div
             id="lblMessage"
-            className={`p-3.5 rounded-xl text-sm font-semibold mb-6 text-center border backdrop-blur-md shadow-md transition-all ${
+            className={`p-3.5 rounded-xl text-xs sm:text-sm font-semibold mb-6 border backdrop-blur-md shadow-md transition-all flex flex-col sm:flex-row items-center justify-between gap-3 ${
               message.isError
-                ? 'bg-red-500/25 text-red-100 border-red-400/50'
+                ? 'bg-amber-500/20 text-amber-100 border-amber-400/50'
                 : 'bg-emerald-500/25 text-emerald-100 border-emerald-400/50'
             }`}
           >
-            {message.text}
+            <div className="flex items-center gap-2 text-left">
+              <span>{message.text}</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setIsConfigModalOpen(true)}
+                className="px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-bold border border-white/20 transition cursor-pointer"
+              >
+                Configure Cloud
+              </button>
+              <button
+                type="button"
+                onClick={() => setMessage(null)}
+                className="p-1 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                title="Dismiss message"
+              >
+                <CloseIcon className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         )}
 
@@ -896,6 +960,15 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
           </div>
         </div>
       </div>
+
+      <SupabaseConfigModal
+        isOpen={isConfigModalOpen}
+        onClose={() => setIsConfigModalOpen(false)}
+        onSyncComplete={(msg) => {
+          setMessage({ text: msg, isError: false });
+          loadRecords(activeTable);
+        }}
+      />
     </div>
   );
 };
