@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DatabaseService } from '../../services/dbStore';
 import { TENANT_TABLE_MAP, formatINR, isPaid } from '../../data/tenantMapping';
+import { RefreshDataButton } from '../common/RefreshDataButton';
 
 interface WaterAllPageProps {
   onNavigate: (page: string, param?: string) => void;
@@ -9,6 +10,11 @@ interface WaterAllPageProps {
 
 export const WaterAllPageDisplay: React.FC<WaterAllPageProps> = ({ onNavigate, onSelectTenant }) => {
   const [, setTick] = useState(0);
+
+  const handleRefresh = async () => {
+    await DatabaseService.syncFromSupabase();
+    setTick((t) => t + 1);
+  };
 
   useEffect(() => {
     const handleUpdate = () => setTick((t) => t + 1);
@@ -23,12 +29,26 @@ export const WaterAllPageDisplay: React.FC<WaterAllPageProps> = ({ onNavigate, o
 
   return (
     <div className="relative z-10 w-full max-w-5xl mx-auto my-6 p-6 sm:p-8 hub-panel">
-      <h1 className="text-2xl sm:text-3xl font-extrabold text-center tracking-wider uppercase mb-2 text-white drop-shadow-md">
-        WATER BILL DIRECTORY & OVERVIEW (ADMIN)
-      </h1>
-      <p className="text-center text-xs text-white/80 mb-6">
-        Select a tenant unit below to manage monthly water meter readings and billing in tables [Water_11 .. Water_41]
-      </p>
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4 pb-3 border-b border-white/10">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-extrabold tracking-wider uppercase text-white drop-shadow-md">
+            WATER BILL DIRECTORY & OVERVIEW (ADMIN)
+          </h1>
+          <p className="text-xs text-white/80 mt-0.5">
+            Select a tenant unit below to manage monthly water meter readings and billing in tables [Water_11 .. Water_41]
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <RefreshDataButton onRefresh={handleRefresh} />
+          <button
+            onClick={() => onNavigate('adminmainpage')}
+            className="hub-btn px-4 py-2 text-xs font-bold uppercase tracking-wider"
+          >
+            Dashboard
+          </button>
+        </div>
+      </div>
 
       {/* 7 Unit Selection Buttons matching waterallpage.aspx */}
       <div className="bg-white/5 border border-white/15 rounded-2xl p-5 mb-8 shadow-lg">

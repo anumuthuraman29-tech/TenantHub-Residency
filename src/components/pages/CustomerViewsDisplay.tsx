@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { DatabaseService } from '../../services/dbStore';
 import { formatINR, isPaid } from '../../data/tenantMapping';
 import { Home, Droplets, CheckCircle2, AlertCircle, ArrowLeft, CreditCard } from 'lucide-react';
+import { RefreshDataButton } from '../common/RefreshDataButton';
 
 interface CustomerViewProps {
   tenantNumber: string;
@@ -9,6 +10,14 @@ interface CustomerViewProps {
 }
 
 export const RentPageDisplay: React.FC<CustomerViewProps> = ({ tenantNumber, onNavigate }) => {
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const handleUpdate = () => setTick((t) => t + 1);
+    window.addEventListener('tenant_hub_db_updated', handleUpdate);
+    return () => window.removeEventListener('tenant_hub_db_updated', handleUpdate);
+  }, []);
+
   const displayName = DatabaseService.getTenantDisplayName(tenantNumber);
   const records = DatabaseService.getRentRecords(tenantNumber);
 
@@ -29,13 +38,22 @@ export const RentPageDisplay: React.FC<CustomerViewProps> = ({ tenantNumber, onN
           </div>
         </div>
 
-        <button
-          onClick={() => onNavigate('paypage')}
-          className="py-2 px-4 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition shadow-md"
-        >
-          <CreditCard className="w-4 h-4" />
-          <span>Pay Rent Now</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <RefreshDataButton
+            onRefresh={async () => {
+              await DatabaseService.syncFromSupabase();
+              setTick((t) => t + 1);
+            }}
+            size="sm"
+          />
+          <button
+            onClick={() => onNavigate('paypage')}
+            className="py-2 px-4 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition shadow-md"
+          >
+            <CreditCard className="w-4 h-4" />
+            <span>Pay Rent Now</span>
+          </button>
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-slate-800 mb-6 bg-slate-900/60">

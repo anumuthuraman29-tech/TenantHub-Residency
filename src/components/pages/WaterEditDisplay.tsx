@@ -1,13 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { DatabaseService } from '../../services/dbStore';
 import { WaterRecord } from '../../types';
 import { Cloud, RefreshCw } from 'lucide-react';
+import { RefreshDataButton } from '../common/RefreshDataButton';
 
 interface WaterEditDisplayProps {
   initialTenantNumber?: string;
+  initialRecordId?: string | number;
   table?: string;
   userRole?: 'Admin' | 'Customer';
   onNavigate: (page: string, param?: string) => void;
+  onSelectRecord?: (recordId: string | number) => void;
 }
 
 const ALLOWED_TABLES = [
@@ -52,9 +55,11 @@ function calculateDayOfWeek(dateStr: string): string {
 
 export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
   initialTenantNumber,
+  initialRecordId,
   table,
   userRole = 'Admin',
   onNavigate,
+  onSelectRecord,
 }) => {
   // Authentication Check: Administrator Access
   const isAdmin = userRole === 'Admin';
@@ -71,7 +76,16 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
 
   // Table records
   const [records, setRecords] = useState<WaterRecord[]>([]);
-  const [selectedRecordId, setSelectedRecordId] = useState<string | number | null>(null);
+  const [selectedRecordId, setSelectedRecordId] = useState<string | number | null>(initialRecordId || null);
+  const [baselineValues, setBaselineValues] = useState<{
+    date: string;
+    ratePerUnit: string;
+    currentReadings: string;
+    previousReadings: string;
+    kitchen: string;
+    balance: string;
+    paid: string;
+  } | null>(null);
 
   // Status/Alert Message
   const [message, setMessage] = useState<{ text: string; isError?: boolean } | null>(null);
@@ -193,6 +207,16 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
     setPaid('PAID');
     setSelectedRecordId(null);
 
+    setBaselineValues({
+      date: today,
+      ratePerUnit: '10',
+      currentReadings: '',
+      previousReadings: prevReadingStr,
+      kitchen: '50',
+      balance: balStr,
+      paid: 'PAID',
+    });
+
     const { totalBill: calcBill, total: calcTotal } = calculateBillAndTotal(
       '',
       prevReadingStr,
@@ -204,12 +228,69 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
     setTotal(calcTotal);
   }, [activeTable, calculateBillAndTotal]);
 
-  // Initialize and reload on table switch
+  // Select a row from the GridView / table
+  const handleSelectRow = useCallback((record: WaterRecord) => {
+    const recordId = record.id ?? record.DATE;
+    setSelectedRecordId(recordId);
+    if (onSelectRecord) {
+      onSelectRecord(recordId);
+    }
+
+    const d = record.DATE;
+    const dy = record.DAY || calculateDayOfWeek(record.DATE);
+    const rpu = '10';
+    const cr = String(record.CURRENT_READINGS ?? '');
+    const pr = String(record.PREVIOUS_READINGS ?? '');
+    const k = String(record.KITCHEN ?? '0');
+    const tb = (record.TOTAL_BILL ?? 0).toFixed(2);
+    const b = (record.BALANCE ?? 0).toFixed(2);
+    const p = (record.PAID || 'PAID').toUpperCase();
+    const tot = (record.TOTAL ?? 0).toFixed(2);
+
+    setDate(d);
+    setDay(dy);
+    setRatePerUnit(rpu);
+    setCurrentReadings(cr);
+    setPreviousReadings(pr);
+    setKitchen(k);
+    setTotalBill(tb);
+    setBalance(b);
+    setPaid(p);
+    setTotal(tot);
+
+    setBaselineValues({
+      date: d,
+      ratePerUnit: rpu,
+      currentReadings: cr,
+      previousReadings: pr,
+      kitchen: k,
+      balance: b,
+      paid: p,
+    });
+
+    setMessage({
+      text: `Selected water record for ${record.DATE} (${activeTable})`,
+      isError: false,
+    });
+  }, [activeTable, onSelectRecord]);
+
+  // Initialize and reload on table switch or mount with initialRecordId support
   useEffect(() => {
-    loadRecords(activeTable);
+    const data = DatabaseService.getWaterRecordsByTable(activeTable);
+    setRecords(data);
+    const targetId = initialRecordId || selectedRecordId;
+    if (targetId) {
+      const match = data.find(
+        (r) => String(r.id) === String(targetId) || String(r.DATE) === String(targetId)
+      );
+      if (match) {
+        handleSelectRow(match);
+        return;
+      }
+    }
     handleClear();
     setMessage(null);
-  }, [activeTable, loadRecords, handleClear]);
+  }, [activeTable, initialRecordId]);
 
   // Keep records synchronized with database updates
   useEffect(() => {
@@ -219,6 +300,41 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
     window.addEventListener('tenant_hub_db_updated', handleDbUpdate);
     return () => window.removeEventListener('tenant_hub_db_updated', handleDbUpdate);
   }, [activeTable, loadRecords]);
+
+  // Unsaved changes check
+  const isDirty = useMemo(() => {
+    if (!baselineValues) return false;
+    return (
+      date !== baselineValues.date ||
+      ratePerUnit !== baselineValues.ratePerUnit ||
+      currentReadings !== baselineValues.currentReadings ||
+      previousReadings !== baselineValues.previousReadings ||
+      kitchen !== baselineValues.kitchen ||
+      balance !== baselineValues.balance ||
+      paid !== baselineValues.paid
+    );
+  }, [baselineValues, date, ratePerUnit, currentReadings, previousReadings, kitchen, balance, paid]);
+
+  // Re-fetch latest data from database without navigating away
+  const handleRefreshData = async () => {
+    await DatabaseService.syncFromSupabase();
+    const freshData = DatabaseService.getWaterRecordsByTable(activeTable);
+    setRecords(freshData);
+    if (selectedRecordId) {
+      const match = freshData.find(
+        (r) => String(r.id) === String(selectedRecordId) || String(r.DATE) === String(selectedRecordId)
+      );
+      if (match) {
+        handleSelectRow(match);
+      }
+    } else {
+      handleClear();
+    }
+    setMessage({
+      text: `✓ Water records re-fetched successfully for ${activeTable}.`,
+      isError: false,
+    });
+  };
 
   // Automatically update Day whenever Date changes
   const handleDateChange = (newDate: string) => {
@@ -278,28 +394,6 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
     );
     setTotalBill(calcBill);
     setTotal(calcTotal);
-  };
-
-  // Select a row from the GridView / table
-  const handleSelectRow = (record: WaterRecord) => {
-    const recordId = record.id ?? record.DATE;
-    setSelectedRecordId(recordId);
-
-    setDate(record.DATE);
-    setDay(record.DAY || calculateDayOfWeek(record.DATE));
-    setRatePerUnit('10');
-    setCurrentReadings(String(record.CURRENT_READINGS ?? ''));
-    setPreviousReadings(String(record.PREVIOUS_READINGS ?? ''));
-    setKitchen(String(record.KITCHEN ?? '0'));
-    setTotalBill((record.TOTAL_BILL ?? 0).toFixed(2));
-    setBalance((record.BALANCE ?? 0).toFixed(2));
-    setPaid((record.PAID || 'PAID').toUpperCase());
-    setTotal((record.TOTAL ?? 0).toFixed(2));
-
-    setMessage({
-      text: `Selected water record for ${record.DATE} (${activeTable})`,
-      isError: false,
-    });
   };
 
   // Add Button Handler
@@ -522,7 +616,13 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0 self-stretch sm:self-auto justify-end">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 shrink-0 self-stretch sm:self-auto justify-end">
+            <RefreshDataButton
+              onRefresh={handleRefreshData}
+              isDirty={isDirty}
+              unsavedWarningMessage="You have unsaved changes in the water bill form. Refreshing the data may discard them. Continue?"
+            />
+
             <button
               id="btnSyncSupabase"
               type="button"

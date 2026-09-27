@@ -15,6 +15,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { AdminNavBar } from '../admin/AdminNavBar';
+import { RefreshDataButton } from '../common/RefreshDataButton';
 
 interface AdminPaymentVerifyProps {
   onNavigate: (page: string) => void;
@@ -127,13 +128,13 @@ export const AdminPaymentVerifyDisplay: React.FC<AdminPaymentVerifyProps> = ({
             </p>
           </div>
 
-          <button
-            onClick={refreshData}
-            className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-2 text-xs font-semibold transition"
-          >
-            <RefreshCw className="w-4 h-4" />
-            <span>Refresh Submissions</span>
-          </button>
+          <RefreshDataButton
+            onRefresh={async () => {
+              await DatabaseService.syncFromSupabase();
+              refreshData();
+            }}
+            buttonText="Refresh Data"
+          />
         </div>
 
         {/* Status Alert Banner */}

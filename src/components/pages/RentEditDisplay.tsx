@@ -2,12 +2,15 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { DatabaseService } from '../../services/dbStore';
 import { RentRecord } from '../../types';
 import { Cloud, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { RefreshDataButton } from '../common/RefreshDataButton';
 
 interface RentEditDisplayProps {
   initialTenantNumber?: string;
+  initialRecordId?: string | number;
   table?: string;
   userRole?: 'Admin' | 'Customer';
   onNavigate: (page: string, param?: string) => void;
+  onSelectRecord?: (recordId: string | number) => void;
 }
 
 const ALLOWED_TABLES = [
@@ -50,9 +53,11 @@ function calculateDayOfWeek(dateStr: string): string {
 
 export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
   initialTenantNumber,
+  initialRecordId,
   table,
   userRole = 'Admin',
   onNavigate,
+  onSelectRecord,
 }) => {
   // Authentication check: Must be Admin
   const isAdmin = userRole === 'Admin';
@@ -76,7 +81,16 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
 
   // Table records
   const [records, setRecords] = useState<RentRecord[]>([]);
-  const [selectedRecordId, setSelectedRecordId] = useState<string | number | null>(null);
+  const [selectedRecordId, setSelectedRecordId] = useState<string | number | null>(initialRecordId || null);
+
+  // Form baseline values to detect unsaved changes
+  const [baselineValues, setBaselineValues] = useState<{
+    date: string;
+    payment: string;
+    balance: string;
+    modeOfPayment: string;
+    paid: string;
+  } | null>(null);
 
   // Status/Alert Message & Action states
   const [message, setMessage] = useState<{ text: string; isError?: boolean } | null>(null);
@@ -142,8 +156,9 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
   // Reset form fields with tenant unit's current monthly rent and computed balance
   const handleClear = useCallback(() => {
     const today = new Date().toISOString().split('T')[0];
+    const dy = calculateDayOfWeek(today);
     setDate(today);
-    setDay(calculateDayOfWeek(today));
+    setDay(dy);
 
     // Auto-populate default monthly rent for current unit
     const tenantNum = activeTable.replace('RENT_', '');
@@ -159,17 +174,76 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
     setBalance(balStr);
     setTotal((defaultRent + outstanding).toFixed(2));
 
-    setModeOfPayment('UPI / PhonePe');
-    setPaid('PAID');
+    const mop = 'UPI / PhonePe';
+    const p = 'PAID';
+    setModeOfPayment(mop);
+    setPaid(p);
     setSelectedRecordId(null);
+
+    setBaselineValues({
+      date: today,
+      payment: payStr,
+      balance: balStr,
+      modeOfPayment: mop,
+      paid: p,
+    });
   }, [activeTable, getCalculatedOutstandingBalance]);
 
-  // Initialize and reload on table switch
+  // Select a row from the table
+  const handleSelectRow = useCallback((record: RentRecord) => {
+    const recordId = record.id ?? record.DATE;
+    setSelectedRecordId(recordId);
+    if (onSelectRecord) {
+      onSelectRecord(recordId);
+    }
+
+    const d = record.DATE;
+    const dy = record.DAY || calculateDayOfWeek(record.DATE);
+    const payStr = (record.PAYMENT ?? 0).toFixed(2);
+    const balStr = (record.BALANCE ?? 0).toFixed(2);
+    const totStr = (record.TOTAL ?? 0).toFixed(2);
+    const mop = record['MODE OF PAYMENT'] || '';
+    const p = (record.PAID || 'PAID').toUpperCase();
+
+    setDate(d);
+    setDay(dy);
+    setPayment(payStr);
+    setBalance(balStr);
+    setTotal(totStr);
+    setModeOfPayment(mop);
+    setPaid(p);
+
+    setBaselineValues({
+      date: d,
+      payment: payStr,
+      balance: balStr,
+      modeOfPayment: mop,
+      paid: p,
+    });
+
+    setMessage({
+      text: `Selected rent record for ${record.DATE} (${activeTable})`,
+      isError: false,
+    });
+  }, [activeTable, onSelectRecord]);
+
+  // Initialize and reload on table switch or mount, with initialRecordId support
   useEffect(() => {
-    loadRecords(activeTable);
+    const data = DatabaseService.getRentRecordsByTable(activeTable);
+    setRecords(data);
+    const targetId = initialRecordId || selectedRecordId;
+    if (targetId) {
+      const match = data.find(
+        (r) => String(r.id) === String(targetId) || String(r.DATE) === String(targetId)
+      );
+      if (match) {
+        handleSelectRow(match);
+        return;
+      }
+    }
     handleClear();
     setMessage(null);
-  }, [activeTable, loadRecords, handleClear]);
+  }, [activeTable, initialRecordId]);
 
   // Keep records in sync with database changes
   useEffect(() => {
@@ -179,6 +253,39 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
     window.addEventListener('tenant_hub_db_updated', handleDbUpdate);
     return () => window.removeEventListener('tenant_hub_db_updated', handleDbUpdate);
   }, [activeTable, loadRecords]);
+
+  // Unsaved changes check
+  const isDirty = useMemo(() => {
+    if (!baselineValues) return false;
+    return (
+      date !== baselineValues.date ||
+      payment !== baselineValues.payment ||
+      balance !== baselineValues.balance ||
+      modeOfPayment !== baselineValues.modeOfPayment ||
+      paid !== baselineValues.paid
+    );
+  }, [baselineValues, date, payment, balance, modeOfPayment, paid]);
+
+  // Re-fetch latest data from database without navigating away
+  const handleRefreshData = async () => {
+    await DatabaseService.syncFromSupabase();
+    const freshData = DatabaseService.getRentRecordsByTable(activeTable);
+    setRecords(freshData);
+    if (selectedRecordId) {
+      const match = freshData.find(
+        (r) => String(r.id) === String(selectedRecordId) || String(r.DATE) === String(selectedRecordId)
+      );
+      if (match) {
+        handleSelectRow(match);
+      }
+    } else {
+      handleClear();
+    }
+    setMessage({
+      text: `✓ Rent records re-fetched successfully for ${activeTable}.`,
+      isError: false,
+    });
+  };
 
   // Automatically update Day whenever Date changes
   const handleDateChange = (newDate: string) => {
@@ -190,31 +297,6 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
   const handlePaymentChange = (newPayment: string) => {
     setPayment(newPayment);
     updateCalculations(newPayment, balance);
-  };
-
-  // Select a row from the table
-  const handleSelectRow = (record: RentRecord) => {
-    const recordId = record.id ?? record.DATE;
-    setSelectedRecordId(recordId);
-
-    setDate(record.DATE);
-    setDay(record.DAY || calculateDayOfWeek(record.DATE));
-    
-    const payStr = (record.PAYMENT ?? 0).toFixed(2);
-    const balStr = (record.BALANCE ?? 0).toFixed(2);
-    const totStr = (record.TOTAL ?? 0).toFixed(2);
-    
-    setPayment(payStr);
-    setBalance(balStr);
-    setTotal(totStr);
-    
-    setModeOfPayment(record['MODE OF PAYMENT'] || '');
-    setPaid((record.PAID || 'PAID').toUpperCase());
-
-    setMessage({
-      text: `Selected rent record for ${record.DATE} (${activeTable})`,
-      isError: false,
-    });
   };
 
   // Add Button Handler
@@ -391,7 +473,13 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0 self-stretch sm:self-auto justify-end">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 shrink-0 self-stretch sm:self-auto justify-end">
+            <RefreshDataButton
+              onRefresh={handleRefreshData}
+              isDirty={isDirty}
+              unsavedWarningMessage="You have unsaved changes in the rent form. Refreshing the data may discard them. Continue?"
+            />
+
             <button
               id="btnSyncSupabase"
               type="button"

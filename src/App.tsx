@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AestheticBackground, BackgroundTheme } from './components/AestheticBackground';
 import { ThemePalette } from './components/ThemePalette';
 import { DatabaseService } from './services/dbStore';
+import { SessionRouter, AuthSession, RouteState } from './services/sessionRouter';
 import {
   CustomerLoginPage,
   AdminLoginPage,
@@ -23,6 +24,8 @@ import { AdminPaymentVerifyDisplay } from './components/pages/AdminPaymentVerify
 import { AdminMaintenanceDisplay } from './components/pages/AdminMaintenanceDisplay';
 import { AdminAnnouncementsDisplay } from './components/pages/AdminAnnouncementsDisplay';
 import { AdminNotificationsDisplay } from './components/pages/AdminNotificationsDisplay';
+import { AdminContactRequestsDisplay } from './components/pages/AdminContactRequestsDisplay';
+import { ContactAdminDisplay } from './components/pages/ContactAdminDisplay';
 import { RentAllPageDisplay } from './components/pages/RentAllPageDisplay';
 import { WaterAllPageDisplay } from './components/pages/WaterAllPageDisplay';
 import { RentEditDisplay } from './components/pages/RentEditDisplay';
@@ -31,14 +34,23 @@ import { RentPageDisplay, WaterBillPageDisplay } from './components/pages/Custom
 import { SendPaymentDisplay } from './components/pages/SendPaymentDisplay';
 import { InfoPageDisplay, PasswordAllPageDisplay } from './components/pages/OtherPagesDisplay';
 
-import { Building2 } from 'lucide-react';
 import { initializeSupabaseRealtime } from './services/supabaseRealtime';
 import tenantHubLogo from './assets/images/tenant_hub_logo.png';
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState<string>('login');
-  const [userRole, setUserRole] = useState<'Admin' | 'Customer'>('Customer');
-  const [currentTenant, setCurrentTenant] = useState<string>('11');
+  // Synchronous session and route restoration from localStorage and URL
+  const initialSession = SessionRouter.getStoredSession();
+  const rawInitialRoute = SessionRouter.getCurrentRoute();
+  const initialGuarded = SessionRouter.guardRoute(rawInitialRoute, initialSession);
+
+  const [currentPage, setCurrentPage] = useState<string>(initialGuarded.page);
+  const [currentTab, setCurrentTab] = useState<string | undefined>(initialGuarded.tab);
+  const [currentTenant, setCurrentTenant] = useState<string>(
+    initialGuarded.param || initialSession?.tenantNumber || '11'
+  );
+  const [currentRecordId, setCurrentRecordId] = useState<string | undefined>(initialGuarded.id);
+  const [userRole, setUserRole] = useState<'Admin' | 'Customer'>(initialSession?.role || 'Customer');
+
   const [bgTheme, setBgTheme] = useState<BackgroundTheme>(() => {
     const saved = localStorage.getItem('TENANT_HUB_THEME');
     const validThemes: BackgroundTheme[] = ['midnight_teal', 'nordic_navy', 'estate_emerald', 'daylight_slate'];
@@ -72,26 +84,120 @@ export default function App() {
     return () => window.removeEventListener('tenant_hub_theme_change', handleGlobalThemeChange);
   }, [bgTheme]);
 
+  // Synchronize URL on initial mount so URL reflects the exact restored page & params
+  useEffect(() => {
+    SessionRouter.replaceUrl(
+      initialGuarded.page,
+      initialGuarded.tab,
+      initialGuarded.param || (userRole === 'Customer' ? currentTenant : undefined),
+      initialGuarded.id
+    );
+  }, []);
+
+  // Handle browser Back & Forward button popstate
+  useEffect(() => {
+    const handlePopState = () => {
+      const route = SessionRouter.getCurrentRoute();
+      const session = SessionRouter.getStoredSession();
+      const guarded = SessionRouter.guardRoute(route, session);
+      setCurrentPage(guarded.page);
+      setCurrentTab(guarded.tab);
+      if (guarded.param) setCurrentTenant(guarded.param);
+      setCurrentRecordId(guarded.id);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Sync with Supabase & background session check
   useEffect(() => {
     DatabaseService.syncFromSupabase();
     const unsubscribe = initializeSupabaseRealtime();
+
+    SessionRouter.restoreSession().then((session) => {
+      if (session) {
+        setUserRole(session.role);
+        if (session.tenantNumber && !currentTenant) {
+          setCurrentTenant(session.tenantNumber);
+        }
+      }
+    });
+
     return () => {
       unsubscribe();
     };
   }, []);
 
+  const handleNavigate = useCallback((page: string, tabOrParam?: string, maybeId?: string) => {
+    let tab: string | undefined = undefined;
+    let param: string | undefined = undefined;
+    let recId: string | undefined = maybeId;
+
+    if (page === 'customermainpage') {
+      tab = tabOrParam || 'dashboard';
+      param = currentTenant;
+    } else if (
+      page === 'rentedit' ||
+      page === 'wateredit' ||
+      page === 'infoeditpage' ||
+      page === 'customerinfo' ||
+      page === 'rentpage' ||
+      page === 'waterbillpage' ||
+      page === 'paypage'
+    ) {
+      if (tabOrParam && !tabOrParam.includes('dashboard')) {
+        param = tabOrParam;
+        setCurrentTenant(tabOrParam);
+      } else {
+        param = currentTenant;
+      }
+    } else if (page === 'adminmaintenance' || page === 'adminannouncements') {
+      recId = tabOrParam;
+    } else if (page === 'contactadmin') {
+      tab = 'contact';
+      param = currentTenant;
+    }
+
+    setCurrentPage(page);
+    setCurrentTab(tab);
+    if (param) setCurrentTenant(param);
+    setCurrentRecordId(recId);
+
+    SessionRouter.pushUrl(
+      page as any,
+      tab,
+      param || (page === 'rentedit' || page === 'wateredit' ? currentTenant : undefined),
+      recId
+    );
+  }, [currentTenant]);
+
   const handleLoginSuccess = (role: 'Admin' | 'Customer', tenantNumber?: string) => {
     setUserRole(role);
+    const targetTenant = tenantNumber || '11';
+    setCurrentTenant(targetTenant);
+
+    const session: AuthSession = {
+      role,
+      tenantNumber: targetTenant,
+      username: role === 'Admin' ? 'Admin Anu M' : `Resident Unit ${targetTenant}`,
+      loggedInAt: Date.now(),
+    };
+    SessionRouter.saveSession(session);
+
     if (role === 'Customer') {
-      setCurrentTenant(tenantNumber || '11');
-      setCurrentPage('customermainpage');
+      handleNavigate('customermainpage', 'dashboard');
     } else {
-      setCurrentPage('adminmainpage');
+      handleNavigate('adminmainpage');
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await SessionRouter.clearSession();
+    setUserRole('Customer');
     setCurrentPage('login');
+    setCurrentTab(undefined);
+    setCurrentRecordId(undefined);
+    SessionRouter.pushUrl('login');
   };
 
   const tenantName = userRole === 'Customer' ? DatabaseService.getTenantResidentName(currentTenant) : 'Administrator';
@@ -104,7 +210,14 @@ export default function App() {
       {/* Modern Midnight + Teal Header Bar */}
       <header className="sticky top-0 z-50 bg-[#0F172A]/90 border-b border-slate-800/80 px-4 sm:px-6 py-2.5 backdrop-blur-xl shadow-lg transition-colors">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <div
+            onClick={() => {
+              if (currentPage !== 'login') {
+                handleNavigate(userRole === 'Admin' ? 'adminmainpage' : 'customermainpage');
+              }
+            }}
+            className="flex items-center gap-3 cursor-pointer select-none"
+          >
             <div className="w-9 h-9 rounded-xl overflow-hidden bg-slate-900/90 border border-teal-500/40 p-0.5 shadow-sm flex items-center justify-center shrink-0">
               <img
                 src={tenantHubLogo}
@@ -139,7 +252,7 @@ export default function App() {
               <button
                 id="btnSignOut"
                 onClick={handleLogout}
-                className="text-xs px-3.5 py-1.5 bg-slate-800 hover:bg-red-500/20 text-slate-300 hover:text-red-300 rounded-full border border-slate-700 hover:border-red-500/30 transition font-semibold"
+                className="text-xs px-3.5 py-1.5 bg-slate-800 hover:bg-red-500/20 text-slate-300 hover:text-red-300 rounded-full border border-slate-700 hover:border-red-500/30 transition font-semibold cursor-pointer"
               >
                 Sign Out
               </button>
@@ -154,162 +267,187 @@ export default function App() {
         {currentPage === 'login' && (
           <LoginPageDisplay
             onLoginSuccess={handleLoginSuccess}
-            onNavigate={setCurrentPage}
+            onNavigate={handleNavigate}
           />
         )}
 
-            {currentPage === 'customerloginpage' && (
-              <CustomerLoginPage
-                onLoginSuccess={handleLoginSuccess}
-                onSwitchMode={() => setCurrentPage('adminloginpage')}
-                onNavigate={setCurrentPage}
-              />
-            )}
+        {currentPage === 'customerloginpage' && (
+          <CustomerLoginPage
+            onLoginSuccess={handleLoginSuccess}
+            onSwitchMode={() => handleNavigate('adminloginpage')}
+            onNavigate={handleNavigate}
+          />
+        )}
 
-            {currentPage === 'adminloginpage' && (
-              <AdminLoginPage
-                onLoginSuccess={handleLoginSuccess}
-                onSwitchMode={() => setCurrentPage('customerloginpage')}
-                onNavigate={setCurrentPage}
-              />
-            )}
+        {currentPage === 'adminloginpage' && (
+          <AdminLoginPage
+            onLoginSuccess={handleLoginSuccess}
+            onSwitchMode={() => handleNavigate('customerloginpage')}
+            onNavigate={handleNavigate}
+          />
+        )}
 
-            {(currentPage === 'customermainpage' || currentPage === 'mainpage') && (
-              <CustomerMainPageDisplay
-                tenantNumber={currentTenant}
-                onNavigate={setCurrentPage}
-                onLogout={handleLogout}
-              />
-            )}
+        {(currentPage === 'customermainpage' || currentPage === 'mainpage') && (
+          <CustomerMainPageDisplay
+            tenantNumber={currentTenant}
+            initialTab={currentTab}
+            onNavigate={handleNavigate}
+            onLogout={handleLogout}
+          />
+        )}
 
-            {currentPage === 'adminmainpage' && (
-              <AdminMainPageDisplay onNavigate={setCurrentPage} onLogout={handleLogout} />
-            )}
+        {currentPage === 'adminmainpage' && (
+          <AdminMainPageDisplay onNavigate={handleNavigate} onLogout={handleLogout} />
+        )}
 
-            {currentPage === 'paymentpage' && (
-              <PaymentPageDisplay
-                tenantNumber={currentTenant}
-                onNavigate={setCurrentPage}
-                userRole={userRole}
-              />
-            )}
+        {currentPage === 'contactadmin' && (
+          <ContactAdminDisplay
+            tenantNumber={currentTenant}
+            onNavigate={handleNavigate}
+            showBackButton={true}
+          />
+        )}
 
-            {currentPage === 'paypage' && (
-              <PayPageDisplay
-                tenantNumber={currentTenant}
-                onNavigate={setCurrentPage}
-                userRole={userRole}
-              />
-            )}
+        {currentPage === 'paymentpage' && (
+          <PaymentPageDisplay
+            tenantNumber={currentTenant}
+            onNavigate={handleNavigate}
+            userRole={userRole}
+          />
+        )}
 
-            {currentPage === 'customerinfo' && (
-              <CustomerInfoDisplay
-                tenantNumber={currentTenant}
-                onNavigate={setCurrentPage}
-              />
-            )}
+        {currentPage === 'paypage' && (
+          <PayPageDisplay
+            tenantNumber={currentTenant}
+            onNavigate={handleNavigate}
+            userRole={userRole}
+          />
+        )}
 
-            {currentPage === 'infoallpage' && (
-              <InfoAllPageDisplay
-                onNavigate={setCurrentPage}
-                onSelectTenant={setCurrentTenant}
-              />
-            )}
+        {currentPage === 'customerinfo' && (
+          <CustomerInfoDisplay
+            tenantNumber={currentTenant}
+            onNavigate={handleNavigate}
+          />
+        )}
 
-            {currentPage === 'infoeditpage' && (
-              <InfoEditDisplay
-                initialTenantNumber={currentTenant}
-                onNavigate={setCurrentPage}
-              />
-            )}
+        {currentPage === 'infoallpage' && (
+          <InfoAllPageDisplay
+            onNavigate={handleNavigate}
+            onSelectTenant={(t) => {
+              setCurrentTenant(t);
+              handleNavigate('infoeditpage', t);
+            }}
+          />
+        )}
 
-            {currentPage === 'adminpaymentverify' && (
-              <AdminPaymentVerifyDisplay
-                onNavigate={setCurrentPage}
-                onLogout={() => {
-                  setUserRole('Customer');
-                  setCurrentPage('login');
-                }}
-              />
-            )}
+        {currentPage === 'infoeditpage' && (
+          <InfoEditDisplay
+            initialTenantNumber={currentTenant}
+            onNavigate={handleNavigate}
+          />
+        )}
 
-            {currentPage === 'adminmaintenance' && (
-              <AdminMaintenanceDisplay
-                onNavigate={setCurrentPage}
-                onLogout={() => {
-                  setUserRole('Customer');
-                  setCurrentPage('login');
-                }}
-              />
-            )}
+        {currentPage === 'adminpaymentverify' && (
+          <AdminPaymentVerifyDisplay
+            onNavigate={handleNavigate}
+            onLogout={handleLogout}
+          />
+        )}
 
-            {currentPage === 'adminannouncements' && (
-              <AdminAnnouncementsDisplay
-                onNavigate={setCurrentPage}
-                onLogout={() => {
-                  setUserRole('Customer');
-                  setCurrentPage('login');
-                }}
-              />
-            )}
+        {currentPage === 'adminmaintenance' && (
+          <AdminMaintenanceDisplay
+            initialTicketId={currentRecordId}
+            onNavigate={handleNavigate}
+            onLogout={handleLogout}
+          />
+        )}
 
-            {currentPage === 'adminnotifications' && (
-              <AdminNotificationsDisplay
-                onNavigate={setCurrentPage}
-                onLogout={() => {
-                  setUserRole('Customer');
-                  setCurrentPage('login');
-                }}
-              />
-            )}
+        {currentPage === 'adminannouncements' && (
+          <AdminAnnouncementsDisplay
+            initialNoticeId={currentRecordId}
+            onNavigate={handleNavigate}
+            onLogout={handleLogout}
+          />
+        )}
 
-            {currentPage === 'rentpage' && (
-              <RentPageDisplay tenantNumber={currentTenant} onNavigate={setCurrentPage} />
-            )}
+        {currentPage === 'adminnotifications' && (
+          <AdminNotificationsDisplay
+            onNavigate={handleNavigate}
+            onLogout={handleLogout}
+          />
+        )}
 
-            {currentPage === 'waterbillpage' && (
-              <WaterBillPageDisplay tenantNumber={currentTenant} onNavigate={setCurrentPage} />
-            )}
+        {currentPage === 'admincontactrequests' && (
+          <AdminContactRequestsDisplay
+            onNavigate={handleNavigate}
+            onLogout={handleLogout}
+          />
+        )}
 
-            {currentPage === 'rentedit' && (
-              <RentEditDisplay
-                initialTenantNumber={currentTenant}
-                userRole={userRole}
-                onNavigate={setCurrentPage}
-              />
-            )}
+        {currentPage === 'rentpage' && (
+          <RentPageDisplay tenantNumber={currentTenant} onNavigate={handleNavigate} />
+        )}
 
-            {currentPage === 'wateredit' && (
-              <WaterEditDisplay
-                initialTenantNumber={currentTenant}
-                userRole={userRole}
-                onNavigate={setCurrentPage}
-              />
-            )}
+        {currentPage === 'waterbillpage' && (
+          <WaterBillPageDisplay tenantNumber={currentTenant} onNavigate={handleNavigate} />
+        )}
 
-            {currentPage === 'rentallpage' && (
-              <RentAllPageDisplay
-                onNavigate={setCurrentPage}
-                onSelectTenant={setCurrentTenant}
-              />
-            )}
+        {currentPage === 'rentedit' && (
+          <RentEditDisplay
+            initialTenantNumber={currentTenant}
+            initialRecordId={currentRecordId}
+            userRole={userRole}
+            onNavigate={handleNavigate}
+            onSelectRecord={(id) => {
+              setCurrentRecordId(String(id));
+              SessionRouter.replaceUrl('rentedit', undefined, currentTenant, String(id));
+            }}
+          />
+        )}
 
-            {currentPage === 'waterallpage' && (
-              <WaterAllPageDisplay
-                onNavigate={setCurrentPage}
-                onSelectTenant={setCurrentTenant}
-              />
-            )}
+        {currentPage === 'wateredit' && (
+          <WaterEditDisplay
+            initialTenantNumber={currentTenant}
+            initialRecordId={currentRecordId}
+            userRole={userRole}
+            onNavigate={handleNavigate}
+            onSelectRecord={(id) => {
+              setCurrentRecordId(String(id));
+              SessionRouter.replaceUrl('wateredit', undefined, currentTenant, String(id));
+            }}
+          />
+        )}
 
-            {currentPage === 'sendpayment' && <SendPaymentDisplay onNavigate={setCurrentPage} />}
+        {currentPage === 'rentallpage' && (
+          <RentAllPageDisplay
+            onNavigate={handleNavigate}
+            onSelectTenant={(t) => {
+              setCurrentTenant(t);
+              handleNavigate('rentedit', t);
+            }}
+          />
+        )}
 
-            {currentPage === 'infopage' && (
-              <InfoPageDisplay onNavigate={setCurrentPage} userRole={userRole} />
-            )}
+        {currentPage === 'waterallpage' && (
+          <WaterAllPageDisplay
+            onNavigate={handleNavigate}
+            onSelectTenant={(t) => {
+              setCurrentTenant(t);
+              handleNavigate('wateredit', t);
+            }}
+          />
+        )}
 
-            {currentPage === 'passwordallpage' && (
-              <PasswordAllPageDisplay onNavigate={setCurrentPage} />
-            )}
+        {currentPage === 'sendpayment' && <SendPaymentDisplay onNavigate={handleNavigate} />}
+
+        {currentPage === 'infopage' && (
+          <InfoPageDisplay onNavigate={handleNavigate} userRole={userRole} />
+        )}
+
+        {currentPage === 'passwordallpage' && (
+          <PasswordAllPageDisplay onNavigate={handleNavigate} />
+        )}
       </main>
     </div>
   );

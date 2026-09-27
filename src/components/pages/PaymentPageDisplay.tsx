@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { DatabaseService } from '../../services/dbStore';
 import { getTenantTables, isPaid, formatINR } from '../../data/tenantMapping';
+import { RefreshDataButton } from '../common/RefreshDataButton';
+import { ArrowLeft } from 'lucide-react';
 
 interface PaymentPageDisplayProps {
   tenantNumber: string;
@@ -75,6 +77,24 @@ export const PaymentPageDisplay: React.FC<PaymentPageDisplayProps> = ({
 
   return (
     <div className="relative z-10 w-full max-w-4xl mx-auto my-6 p-6 sm:p-8 hub-panel">
+      <div className="flex items-center justify-between gap-3 mb-6 pb-3 border-b border-white/10">
+        <button
+          onClick={() => onNavigate(userRole === 'Admin' ? 'adminpaymentverify' : 'customermainpage')}
+          className="text-xs font-semibold text-teal-300 hover:text-teal-200 inline-flex items-center gap-1.5 cursor-pointer"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back</span>
+        </button>
+
+        <RefreshDataButton
+          onRefresh={async () => {
+            await DatabaseService.syncFromSupabase();
+            setTick((t) => t + 1);
+          }}
+          size="sm"
+        />
+      </div>
+
       {/* Centered Page Title */}
       <h1 className="header-title">
         PAYMENT DETAILS

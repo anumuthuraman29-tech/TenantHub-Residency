@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { DatabaseService } from '../../services/dbStore';
 import { NoticeRecord } from '../../types';
 import {
@@ -15,13 +15,17 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { AdminNavBar } from '../admin/AdminNavBar';
+import { RefreshDataButton } from '../common/RefreshDataButton';
+import { SessionRouter } from '../../services/sessionRouter';
 
 interface AdminAnnouncementsProps {
+  initialNoticeId?: string;
   onNavigate: (page: string) => void;
   onLogout: () => void;
 }
 
 export const AdminAnnouncementsDisplay: React.FC<AdminAnnouncementsProps> = ({
+  initialNoticeId,
   onNavigate,
   onLogout,
 }) => {
@@ -37,16 +41,34 @@ export const AdminAnnouncementsDisplay: React.FC<AdminAnnouncementsProps> = ({
   const [category, setCategory] = useState<NoticeRecord['category']>('Maintenance');
   const [priority, setPriority] = useState<'NORMAL' | 'URGENT'>('NORMAL');
 
+  const isDirty = useMemo(() => {
+    return title.trim().length > 0 || description.trim().length > 0;
+  }, [title, description]);
+
   const loadNotices = () => {
     setNotices([...DatabaseService.getNotices()]);
   };
 
+  const handleRefreshData = async () => {
+    await DatabaseService.syncFromSupabase();
+    loadNotices();
+    setStatusMessage('✓ Announcements re-fetched from database.');
+    setTimeout(() => setStatusMessage(null), 3000);
+  };
+
   useEffect(() => {
     loadNotices();
+    if (initialNoticeId) {
+      const all = DatabaseService.getNotices();
+      const match = all.find((n) => n.id === initialNoticeId);
+      if (match) {
+        handleOpenEditModal(match);
+      }
+    }
     const handleUpdate = () => loadNotices();
     window.addEventListener('tenant_hub_db_updated', handleUpdate);
     return () => window.removeEventListener('tenant_hub_db_updated', handleUpdate);
-  }, []);
+  }, [initialNoticeId]);
 
   const handleOpenCreateModal = () => {
     setEditingNoticeId(null);
@@ -64,6 +86,13 @@ export const AdminAnnouncementsDisplay: React.FC<AdminAnnouncementsProps> = ({
     setCategory(n.category);
     setPriority(n.priority);
     setShowModal(true);
+    SessionRouter.replaceUrl('adminannouncements', undefined, undefined, n.id);
+  };
+
+  const handleCloseModal = () => {
+    setShowModal(false);
+    setEditingNoticeId(null);
+    SessionRouter.replaceUrl('adminannouncements');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -92,7 +121,7 @@ export const AdminAnnouncementsDisplay: React.FC<AdminAnnouncementsProps> = ({
       );
     }
 
-    setShowModal(false);
+    handleCloseModal();
     loadNotices();
     setTimeout(() => setStatusMessage(null), 5000);
   };
@@ -146,13 +175,11 @@ export const AdminAnnouncementsDisplay: React.FC<AdminAnnouncementsProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={loadNotices}
-              className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition"
-              title="Refresh bulletins"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
+            <RefreshDataButton
+              onRefresh={handleRefreshData}
+              isDirty={isDirty}
+              unsavedWarningMessage="You have unsaved changes in the announcement form. Refreshing the data may discard them. Continue?"
+            />
             <button
               onClick={handleOpenCreateModal}
               className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-400 hover:from-cyan-400 hover:to-teal-300 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-cyan-500/20 transition"
@@ -277,7 +304,7 @@ export const AdminAnnouncementsDisplay: React.FC<AdminAnnouncementsProps> = ({
                 <span>{editingNoticeId ? 'Edit Announcement' : 'Publish New Announcement'}</span>
               </h3>
               <button
-                onClick={() => setShowModal(false)}
+                onClick={handleCloseModal}
                 className="text-slate-400 hover:text-white text-lg font-bold"
               >
                 ✕
@@ -358,7 +385,7 @@ export const AdminAnnouncementsDisplay: React.FC<AdminAnnouncementsProps> = ({
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={handleCloseModal}
                   className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 text-xs font-semibold"
                 >
                   Cancel

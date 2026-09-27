@@ -13,15 +13,20 @@ import {
   MessageSquare,
   ArrowLeft,
   Flame,
+  Eye,
 } from 'lucide-react';
 import { AdminNavBar } from '../admin/AdminNavBar';
+import { RefreshDataButton } from '../common/RefreshDataButton';
+import { SessionRouter } from '../../services/sessionRouter';
 
 interface AdminMaintenanceProps {
+  initialTicketId?: string;
   onNavigate: (page: string) => void;
   onLogout: () => void;
 }
 
 export const AdminMaintenanceDisplay: React.FC<AdminMaintenanceProps> = ({
+  initialTicketId,
   onNavigate,
   onLogout,
 }) => {
@@ -29,8 +34,9 @@ export const AdminMaintenanceDisplay: React.FC<AdminMaintenanceProps> = ({
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | 'IN PROGRESS' | 'RESOLVED'>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [roomFilter, setRoomFilter] = useState<string>('ALL');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialTicketId || '');
   const [statusNotice, setStatusNotice] = useState<string | null>(null);
+  const [selectedTicket, setSelectedTicket] = useState<ComplaintRecord | null>(null);
 
   // New ticket modal
   const [showAddModal, setShowAddModal] = useState(false);
@@ -40,17 +46,52 @@ export const AdminMaintenanceDisplay: React.FC<AdminMaintenanceProps> = ({
   const [newPriority, setNewPriority] = useState<ComplaintRecord['priority']>('MEDIUM');
   const [newDescription, setNewDescription] = useState('');
 
+  const isDirty = useMemo(() => {
+    return newTitle.trim().length > 0 || newDescription.trim().length > 0;
+  }, [newTitle, newDescription]);
+
   const loadData = () => {
     const list = DatabaseService.getComplaints();
     setComplaints([...list]);
   };
 
+  const handleRefreshData = async () => {
+    await DatabaseService.syncFromSupabase();
+    loadData();
+    setStatusNotice('✓ Maintenance tickets re-fetched from database.');
+    setTimeout(() => setStatusNotice(null), 3000);
+  };
+
   useEffect(() => {
     loadData();
-    const handleUpdate = () => loadData();
+    if (initialTicketId) {
+      setSearchQuery(initialTicketId);
+      const list = DatabaseService.getComplaints();
+      const match = list.find((c) => c.id === initialTicketId);
+      if (match) {
+        setSelectedTicket(match);
+      }
+    }
+    const handleUpdate = () => {
+      loadData();
+      if (selectedTicket) {
+        const fresh = DatabaseService.getComplaints().find((c) => c.id === selectedTicket.id);
+        if (fresh) setSelectedTicket(fresh);
+      }
+    };
     window.addEventListener('tenant_hub_db_updated', handleUpdate);
     return () => window.removeEventListener('tenant_hub_db_updated', handleUpdate);
-  }, []);
+  }, [initialTicketId]);
+
+  const handleOpenTicket = (item: ComplaintRecord) => {
+    setSelectedTicket(item);
+    SessionRouter.replaceUrl('adminmaintenance', undefined, undefined, item.id);
+  };
+
+  const handleCloseTicket = () => {
+    setSelectedTicket(null);
+    SessionRouter.replaceUrl('adminmaintenance');
+  };
 
   const handleStatusChange = (
     complaintId: string,
@@ -58,6 +99,9 @@ export const AdminMaintenanceDisplay: React.FC<AdminMaintenanceProps> = ({
   ) => {
     DatabaseService.updateComplaintStatus(complaintId, newStatus);
     loadData();
+    if (selectedTicket && selectedTicket.id === complaintId) {
+      setSelectedTicket((prev) => (prev ? { ...prev, status: newStatus } : null));
+    }
     setStatusNotice(`✓ Ticket status updated to "${newStatus}"! Tenant notification & SMS dispatched.`);
     setTimeout(() => setStatusNotice(null), 4000);
   };
@@ -128,13 +172,11 @@ export const AdminMaintenanceDisplay: React.FC<AdminMaintenanceProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={loadData}
-              className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition"
-              title="Refresh tickets"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
+            <RefreshDataButton
+              onRefresh={handleRefreshData}
+              isDirty={isDirty}
+              unsavedWarningMessage="You have unsaved changes in the work order form. Refreshing the data may discard them. Continue?"
+            />
             <button
               onClick={() => setShowAddModal(true)}
               className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-400 hover:from-cyan-400 hover:to-teal-300 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-cyan-500/20 transition"
@@ -406,6 +448,15 @@ export const AdminMaintenanceDisplay: React.FC<AdminMaintenanceProps> = ({
                       >
                         ✓ Mark Resolved
                       </button>
+
+                      <button
+                        onClick={() => handleOpenTicket(item)}
+                        className="px-3.5 py-1.5 rounded-xl font-bold text-xs bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 transition flex items-center gap-1.5 cursor-pointer"
+                        title="Open Request details"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>Open Request</span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -414,6 +465,130 @@ export const AdminMaintenanceDisplay: React.FC<AdminMaintenanceProps> = ({
           )}
         </div>
       </main>
+
+      {/* Open Request Modal */}
+      {selectedTicket && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#1C2541] border border-cyan-500/40 rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start mb-5 pb-3 border-b border-slate-700">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-mono text-xs font-bold text-cyan-400 bg-cyan-500/15 px-2.5 py-1 rounded-lg border border-cyan-500/30">
+                    {selectedTicket.id}
+                  </span>
+                  <span
+                    className={`text-xs px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                      selectedTicket.status === 'RESOLVED'
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                        : selectedTicket.status === 'IN PROGRESS'
+                        ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                    }`}
+                  >
+                    {selectedTicket.status}
+                  </span>
+                </div>
+                <h3 className="text-xl font-black text-white flex items-center gap-2">
+                  <span>{selectedTicket.title}</span>
+                </h3>
+              </div>
+              <button
+                onClick={handleCloseTicket}
+                className="text-slate-400 hover:text-white text-xl font-bold p-1 cursor-pointer"
+                title="Close Request Details"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#0B132B] p-4 rounded-2xl border border-slate-800 text-xs">
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Resident</span>
+                  <span className="font-bold text-white text-sm">{selectedTicket.tenantName}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Room / Unit</span>
+                  <span className="font-bold text-cyan-300 text-sm">{selectedTicket.room}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Category</span>
+                  <span className="font-bold text-slate-200">{selectedTicket.category}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Priority</span>
+                  <span className={`font-bold ${selectedTicket.priority === 'HIGH' ? 'text-red-400' : 'text-slate-200'}`}>
+                    {selectedTicket.priority}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <span className="text-xs font-bold text-slate-300 uppercase tracking-wide block mb-1">
+                  Issue Description & Resident Report:
+                </span>
+                <div className="bg-[#0B132B] p-4 rounded-2xl border border-slate-800 text-xs text-slate-200 leading-relaxed">
+                  {selectedTicket.description}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800 text-xs">
+                <span className="text-slate-400 text-[11px]">
+                  Submitted on: {selectedTicket.createdAt}
+                  {selectedTicket.resolvedAt && ` • Resolved: ${selectedTicket.resolvedAt}`}
+                </span>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400 text-[11px]">Update Status:</span>
+                  <button
+                    onClick={() => handleStatusChange(selectedTicket.id, 'OPEN')}
+                    disabled={selectedTicket.status === 'OPEN'}
+                    className={`px-3 py-1.5 rounded-xl font-bold text-xs transition ${
+                      selectedTicket.status === 'OPEN'
+                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 opacity-60'
+                        : 'bg-slate-800 hover:bg-amber-500/20 text-slate-300'
+                    }`}
+                  >
+                    Open
+                  </button>
+                  <button
+                    onClick={() => handleStatusChange(selectedTicket.id, 'IN PROGRESS')}
+                    disabled={selectedTicket.status === 'IN PROGRESS'}
+                    className={`px-3 py-1.5 rounded-xl font-bold text-xs transition ${
+                      selectedTicket.status === 'IN PROGRESS'
+                        ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 opacity-60'
+                        : 'bg-slate-800 hover:bg-cyan-500/20 text-slate-300'
+                    }`}
+                  >
+                    In Progress
+                  </button>
+                  <button
+                    onClick={() => handleStatusChange(selectedTicket.id, 'RESOLVED')}
+                    disabled={selectedTicket.status === 'RESOLVED'}
+                    className={`px-3 py-1.5 rounded-xl font-bold text-xs transition ${
+                      selectedTicket.status === 'RESOLVED'
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 opacity-60'
+                        : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                    }`}
+                  >
+                    ✓ Resolved
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-2 text-right">
+                <button
+                  type="button"
+                  onClick={handleCloseTicket}
+                  className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition"
+                >
+                  Close View
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Log New Work Order Modal */}
       {showAddModal && (

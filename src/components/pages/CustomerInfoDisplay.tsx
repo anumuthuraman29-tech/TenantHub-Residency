@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { DatabaseService } from '../../services/dbStore';
 import { getTenantTables, formatINR } from '../../data/tenantMapping';
+import { RefreshDataButton } from '../common/RefreshDataButton';
+import { ArrowLeft } from 'lucide-react';
 
 interface CustomerInfoProps {
   tenantNumber: string;
@@ -41,6 +43,24 @@ export const CustomerInfoDisplay: React.FC<CustomerInfoProps> = ({ tenantNumber,
 
   return (
     <div className="relative z-10 w-full max-w-2xl mx-auto my-8 p-6 sm:p-8 hub-panel">
+      <div className="flex items-center justify-between gap-3 mb-5 pb-3 border-b border-white/10">
+        <button
+          onClick={() => onNavigate('customermainpage')}
+          className="text-xs font-semibold text-teal-300 hover:text-teal-200 inline-flex items-center gap-1.5 cursor-pointer"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to Dashboard</span>
+        </button>
+
+        <RefreshDataButton
+          onRefresh={async () => {
+            await DatabaseService.syncFromSupabase();
+            setTick((t) => t + 1);
+          }}
+          size="sm"
+        />
+      </div>
+
       <h1 className="text-2xl sm:text-3xl font-extrabold text-center tracking-wider uppercase mb-6 text-white drop-shadow-md">
         TENANT PROFILE & LEASE INFORMATION
       </h1>

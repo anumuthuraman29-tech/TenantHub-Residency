@@ -22,6 +22,7 @@ import {
   Phone,
 } from 'lucide-react';
 import { AdminNavBar } from '../admin/AdminNavBar';
+import { RefreshDataButton } from '../common/RefreshDataButton';
 
 interface AdminMainPageProps {
   onNavigate: (page: string) => void;
@@ -36,6 +37,11 @@ export const AdminMainPageDisplay: React.FC<AdminMainPageProps> = ({
 
   const reloadData = () => {
     setRefreshKey((prev) => prev + 1);
+  };
+
+  const handleRefreshDashboard = async () => {
+    await DatabaseService.syncFromSupabase();
+    reloadData();
   };
 
   useEffect(() => {
@@ -115,14 +121,8 @@ export const AdminMainPageDisplay: React.FC<AdminMainPageProps> = ({
             </p>
           </div>
 
-          <div className="relative z-10 flex items-center gap-3">
-            <button
-              onClick={reloadData}
-              className="p-3 rounded-2xl bg-[#0B132B]/80 hover:bg-slate-800 border border-slate-700 text-slate-300 transition"
-              title="Refresh Dashboard Data"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
+          <div className="relative z-10 flex flex-wrap items-center gap-3">
+            <RefreshDataButton onRefresh={handleRefreshDashboard} />
             <button
               onClick={() => onNavigate('adminpaymentverify')}
               className="px-5 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 to-teal-400 hover:from-cyan-400 hover:to-teal-300 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-cyan-500/25 transition group"

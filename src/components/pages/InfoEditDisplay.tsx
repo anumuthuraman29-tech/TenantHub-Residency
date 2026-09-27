@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { DatabaseService } from '../../services/dbStore';
 import { TENANT_TABLE_MAP, getTenantTables, formatINR } from '../../data/tenantMapping';
 import { CustomerInfoRecord } from '../../types';
+import { RefreshDataButton } from '../common/RefreshDataButton';
 
 interface InfoEditDisplayProps {
   initialTenantNumber?: string;
@@ -27,6 +28,30 @@ export const InfoEditDisplay: React.FC<InfoEditDisplayProps> = ({
   const [yearlyIncrement, setYearlyIncrement] = useState('5');
   const [selectedId, setSelectedId] = useState<string | number | null>(null);
 
+  // Baseline values to detect unsaved changes
+  const [baselineValues, setBaselineValues] = useState<{
+    name: string;
+    phoneNumber: string;
+    arrivedDate: string;
+    advancePaid: string;
+    currentRent: string;
+    currentIncrement: string;
+    yearlyIncrement: string;
+  } | null>(null);
+
+  const isDirty = useMemo(() => {
+    if (!baselineValues) return false;
+    return (
+      name !== baselineValues.name ||
+      phoneNumber !== baselineValues.phoneNumber ||
+      arrivedDate !== baselineValues.arrivedDate ||
+      advancePaid !== baselineValues.advancePaid ||
+      currentRent !== baselineValues.currentRent ||
+      currentIncrement !== baselineValues.currentIncrement ||
+      yearlyIncrement !== baselineValues.yearlyIncrement
+    );
+  }, [baselineValues, name, phoneNumber, arrivedDate, advancePaid, currentRent, currentIncrement, yearlyIncrement]);
+
   const loadData = () => {
     try {
       const list = DatabaseService.getInfoRecords(selectedTenant);
@@ -41,6 +66,12 @@ export const InfoEditDisplay: React.FC<InfoEditDisplayProps> = ({
     }
   };
 
+  const handleRefreshData = async () => {
+    await DatabaseService.syncFromSupabase();
+    loadData();
+    setMessage({ text: `✓ Directory records re-fetched successfully for Tenant ${selectedTenant}.`, isError: false });
+  };
+
   useEffect(() => {
     loadData();
     setMessage(null);
@@ -52,22 +83,47 @@ export const InfoEditDisplay: React.FC<InfoEditDisplayProps> = ({
     setName(r.NAME);
     setPhoneNumber(r.PHONE_NUMBER);
     setArrivedDate(r.ARRIVED_DATE);
-    setAdvancePaid(String(r.ADVANCE_PAID));
-    setCurrentRent(String(r.CURRENT_RENT));
-    setCurrentIncrement(String(r.CURRENT_INCREMENT));
-    setYearlyIncrement(String(r.YEARLY_INCREMENT));
+    const adv = String(r.ADVANCE_PAID);
+    const cr = String(r.CURRENT_RENT);
+    const ci = String(r.CURRENT_INCREMENT);
+    const yi = String(r.YEARLY_INCREMENT);
+    setAdvancePaid(adv);
+    setCurrentRent(cr);
+    setCurrentIncrement(ci);
+    setYearlyIncrement(yi);
+
+    setBaselineValues({
+      name: r.NAME,
+      phoneNumber: r.PHONE_NUMBER,
+      arrivedDate: r.ARRIVED_DATE,
+      advancePaid: adv,
+      currentRent: cr,
+      currentIncrement: ci,
+      yearlyIncrement: yi,
+    });
   };
 
   const clearForm = () => {
     setUserName(selectedTenant);
     setName('');
     setPhoneNumber('');
-    setArrivedDate(new Date().toISOString().split('T')[0]);
+    const today = new Date().toISOString().split('T')[0];
+    setArrivedDate(today);
     setAdvancePaid('0');
     setCurrentRent('0');
     setCurrentIncrement('0');
     setYearlyIncrement('5');
     setSelectedId(null);
+
+    setBaselineValues({
+      name: '',
+      phoneNumber: '',
+      arrivedDate: today,
+      advancePaid: '0',
+      currentRent: '0',
+      currentIncrement: '0',
+      yearlyIncrement: '5',
+    });
   };
 
   const handleSelectRow = (r: CustomerInfoRecord) => {
@@ -133,12 +189,31 @@ export const InfoEditDisplay: React.FC<InfoEditDisplayProps> = ({
 
   return (
     <div className="relative z-10 w-full max-w-5xl mx-auto my-6 p-6 hub-panel">
-      <h2 className="text-xl sm:text-2xl font-bold text-center tracking-wider uppercase mb-2 text-white">
-        TENANT INFORMATION MANAGEMENT (INFO_{selectedTenant})
-      </h2>
-      <p className="text-center text-xs text-white/80 mb-6">
-        ASP.NET Code-Behind Simulation for Table: <strong className="text-white">[{tenantInfo.infoTable}]</strong>
-      </p>
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4 pb-3 border-b border-white/10">
+        <div>
+          <h2 className="text-xl sm:text-2xl font-bold tracking-wider uppercase text-white">
+            TENANT INFORMATION MANAGEMENT (INFO_{selectedTenant})
+          </h2>
+          <p className="text-xs text-white/80 mt-0.5">
+            Directory & Lease Parameters for Table: <strong className="text-white">[{tenantInfo.infoTable}]</strong>
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <RefreshDataButton
+            onRefresh={handleRefreshData}
+            isDirty={isDirty}
+            unsavedWarningMessage="You have unsaved changes in the tenant details form. Refreshing the data may discard them. Continue?"
+          />
+          <button
+            type="button"
+            onClick={() => onNavigate('infoallpage')}
+            className="hub-btn hub-btn-primary px-4 py-2 text-xs font-bold flex items-center justify-center cursor-pointer"
+          >
+            Directory
+          </button>
+        </div>
+      </div>
 
       {message && (
         <div

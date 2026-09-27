@@ -29,22 +29,38 @@ import { DatabaseService } from '../../services/dbStore';
 import { ThemePalette } from '../ThemePalette';
 import { getTenantTables, formatINR, isPaid } from '../../data/tenantMapping';
 import { ComplaintRecord, NoticeRecord, NotificationRecord } from '../../types';
+import { RefreshDataButton } from '../common/RefreshDataButton';
+import { ContactAdminDisplay } from './ContactAdminDisplay';
+import { SessionRouter } from '../../services/sessionRouter';
 
 interface CustomerMainPageProps {
   tenantNumber: string;
-  onNavigate: (page: string) => void;
+  initialTab?: string;
+  onNavigate: (page: string, tab?: string) => void;
   onLogout: () => void;
 }
 
-type TabType = 'dashboard' | 'payments' | 'complaints' | 'notices' | 'residency' | 'profile';
+type TabType = 'dashboard' | 'payments' | 'complaints' | 'notices' | 'residency' | 'profile' | 'contact';
 
 export const CustomerMainPageDisplay: React.FC<CustomerMainPageProps> = ({
   tenantNumber,
+  initialTab,
   onNavigate,
   onLogout,
 }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [activeTab, setActiveTab] = useState<TabType>((initialTab as TabType) || 'dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (initialTab && initialTab !== activeTab) {
+      setActiveTab(initialTab as TabType);
+    }
+  }, [initialTab]);
+
+  const handleSelectTab = (tab: TabType) => {
+    setActiveTab(tab);
+    SessionRouter.pushUrl('customermainpage', tab, tenantNumber);
+  };
   const [showComplaintModal, setShowComplaintModal] = useState(false);
   const [newComplaintTitle, setNewComplaintTitle] = useState('');
   const [newComplaintCategory, setNewComplaintCategory] = useState<
@@ -158,6 +174,7 @@ export const CustomerMainPageDisplay: React.FC<CustomerMainPageProps> = ({
     { id: 'notices', label: 'Notices', icon: Bell },
     { id: 'residency', label: 'Residency', icon: Building2 },
     { id: 'profile', label: 'Profile', icon: User },
+    { id: 'contact', label: 'Contact Admin', icon: Phone },
   ];
 
   return (
@@ -184,8 +201,8 @@ export const CustomerMainPageDisplay: React.FC<CustomerMainPageProps> = ({
               return (
                 <button
                   key={item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  onClick={() => handleSelectTab(item.id)}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                     isActive
                       ? 'bg-teal-500/15 text-teal-300 border border-teal-500/30 shadow-md'
                       : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
@@ -282,7 +299,7 @@ export const CustomerMainPageDisplay: React.FC<CustomerMainPageProps> = ({
                 <button
                   key={item.id}
                   onClick={() => {
-                    setActiveTab(item.id);
+                    handleSelectTab(item.id);
                     setMobileMenuOpen(false);
                   }}
                   className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold ${
@@ -331,7 +348,14 @@ export const CustomerMainPageDisplay: React.FC<CustomerMainPageProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+            <RefreshDataButton
+              onRefresh={async () => {
+                await DatabaseService.syncFromSupabase();
+                setTick((t) => t + 1);
+              }}
+              size="sm"
+            />
             <ThemePalette />
             <div className="flex items-center gap-2 bg-slate-800/60 border border-slate-700/60 px-3.5 py-1.5 rounded-full text-xs text-slate-300">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -341,8 +365,8 @@ export const CustomerMainPageDisplay: React.FC<CustomerMainPageProps> = ({
             </div>
 
             <button
-              onClick={() => setActiveTab('notices')}
-              className="relative p-2 rounded-full bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 text-slate-300 transition"
+              onClick={() => handleSelectTab('notices')}
+              className="relative p-2 rounded-full bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 text-slate-300 transition cursor-pointer"
               title="Residency Notices & Alerts"
             >
               <Bell className="w-4 h-4" />
@@ -1308,6 +1332,21 @@ export const CustomerMainPageDisplay: React.FC<CustomerMainPageProps> = ({
               </div>
             </div>
           </div>
+        )}
+
+        {/* 7. CONTACT ADMIN VIEW */}
+        {activeTab === 'contact' && (
+          <ContactAdminDisplay
+            tenantNumber={tenantNumber}
+            onNavigate={(page, tab) => {
+              if (page === 'customermainpage') {
+                handleSelectTab((tab as TabType) || 'dashboard');
+              } else {
+                onNavigate(page, tab);
+              }
+            }}
+            showBackButton={false}
+          />
         )}
       </div>
 

@@ -13,6 +13,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { AdminNavBar } from '../admin/AdminNavBar';
+import { RefreshDataButton } from '../common/RefreshDataButton';
 
 interface AdminNotificationsProps {
   onNavigate: (page: string) => void;
@@ -105,6 +106,12 @@ export const AdminNotificationsDisplay: React.FC<AdminNotificationsProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            <RefreshDataButton
+              onRefresh={async () => {
+                await DatabaseService.syncFromSupabase();
+                loadNotifs();
+              }}
+            />
             <button
               onClick={handleMarkAllRead}
               className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition"

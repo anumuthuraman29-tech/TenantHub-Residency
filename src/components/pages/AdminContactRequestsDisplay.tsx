@@ -16,6 +16,7 @@ import {
 import { DatabaseService } from '../../services/dbStore';
 import { ContactRequest } from '../../types';
 import { AdminNavBar } from '../admin/AdminNavBar';
+import { RefreshDataButton } from '../common/RefreshDataButton';
 
 interface AdminContactRequestsProps {
   onNavigate: (page: string) => void;
@@ -100,13 +101,12 @@ export const AdminContactRequestsDisplay: React.FC<AdminContactRequestsProps> = 
             </p>
           </div>
 
-          <button
-            onClick={loadRequests}
-            className="self-start sm:self-auto flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-teal-400 border border-slate-700 shadow-md transition"
-          >
-            <RefreshCw className="w-4 h-4" />
-            <span>Refresh</span>
-          </button>
+          <RefreshDataButton
+            onRefresh={async () => {
+              await DatabaseService.syncFromSupabase();
+              loadRequests();
+            }}
+          />
         </div>
 
         {/* Metric Badges & Filter Tabs */}
