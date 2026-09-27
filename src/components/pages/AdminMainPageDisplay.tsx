@@ -19,6 +19,7 @@ import {
   KeyRound,
   Bell,
   RefreshCw,
+  Phone,
 } from 'lucide-react';
 import { AdminNavBar } from '../admin/AdminNavBar';
 
@@ -65,10 +66,15 @@ export const AdminMainPageDisplay: React.FC<AdminMainPageProps> = ({
     const complaints = DatabaseService.getComplaints();
     const pendingComplaints = complaints.filter((c) => c.status === 'OPEN');
 
+    // Contact Requests
+    const contactRequests = DatabaseService.getContactRequests();
+    const newContactRequests = contactRequests.filter((r) => r.status === 'NEW');
+
     // Recent activities
     const recentPayments = paymentSubs.slice(0, 4);
     const recentComplaints = complaints.slice(0, 4);
     const recentNotices = DatabaseService.getNotices().slice(0, 3);
+    const recentContacts = contactRequests.slice(0, 4);
 
     return {
       totalTenants,
@@ -80,10 +86,12 @@ export const AdminMainPageDisplay: React.FC<AdminMainPageProps> = ({
       pendingPaymentsCount: pendingPayments.length,
       verifiedPaymentsCount: verifiedPayments.length,
       rejectedPaymentsCount: rejectedPayments.length,
+      newContactRequestsCount: newContactRequests.length,
       totalCollected,
       recentPayments,
       recentComplaints,
       recentNotices,
+      recentContacts,
     };
   }, [refreshKey]);
 
@@ -139,7 +147,7 @@ export const AdminMainPageDisplay: React.FC<AdminMainPageProps> = ({
             Real-Time Residency Metrics
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 sm:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 sm:gap-3.5">
             {/* Card 1: Total Tenants */}
             <div
               onClick={() => onNavigate('infoallpage')}
@@ -261,6 +269,34 @@ export const AdminMainPageDisplay: React.FC<AdminMainPageProps> = ({
                   )}
                 </div>
                 <div className="text-[10px] text-amber-300/80 mt-0.5">Click to verify UTRs</div>
+              </div>
+            </div>
+
+            {/* Card 7: Contact Admin Requests */}
+            <div
+              onClick={() => onNavigate('admincontactrequests')}
+              className={`p-4 sm:p-5 rounded-2xl border transition cursor-pointer group shadow-lg flex flex-col justify-between ${
+                metrics.newContactRequestsCount > 0
+                  ? 'bg-[#1C2541] border-teal-500/80 shadow-teal-500/10'
+                  : 'bg-[#1C2541] border-slate-700/80 hover:border-teal-500/50'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] text-teal-300 font-semibold uppercase">Contact Desk</span>
+                <div className="w-8 h-8 rounded-xl bg-teal-500/15 text-teal-400 flex items-center justify-center group-hover:scale-110 transition">
+                  <Phone className="w-4 h-4" />
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-black text-teal-300 flex items-center gap-2">
+                  <span>{metrics.newContactRequestsCount}</span>
+                  {metrics.newContactRequestsCount > 0 && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-400 text-slate-950 font-black animate-pulse">
+                      New
+                    </span>
+                  )}
+                </div>
+                <div className="text-[10px] text-teal-300/80 mt-0.5">Resident queries</div>
               </div>
             </div>
           </div>
@@ -468,6 +504,17 @@ export const AdminMainPageDisplay: React.FC<AdminMainPageProps> = ({
                 </button>
 
                 <button
+                  onClick={() => onNavigate('admincontactrequests')}
+                  className="w-full p-3 rounded-xl bg-[#0B132B] hover:bg-slate-800 border border-slate-800 hover:border-teal-500/50 text-slate-200 text-xs font-bold flex items-center justify-between transition group"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Phone className="w-4 h-4 text-teal-400" />
+                    <span>Review Contact Requests</span>
+                  </div>
+                  <span className="text-slate-500 group-hover:text-teal-400 font-bold">→</span>
+                </button>
+
+                <button
                   onClick={() => onNavigate('passwordallpage')}
                   className="w-full p-3 rounded-xl bg-[#0B132B] hover:bg-slate-800 border border-slate-800 hover:border-purple-500/50 text-slate-200 text-xs font-bold flex items-center justify-between transition group"
                 >
@@ -488,8 +535,8 @@ export const AdminMainPageDisplay: React.FC<AdminMainPageProps> = ({
           </div>
         </div>
 
-        {/* SECTION 3: Recent Activity (Maintenance Tickets & Residency Bulletins) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* SECTION 3: Recent Activity (Maintenance, Bulletins & Contact Requests) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Maintenance Work Orders */}
           <div className="bg-[#1C2541] border border-slate-700/80 rounded-3xl p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
@@ -599,6 +646,66 @@ export const AdminMainPageDisplay: React.FC<AdminMainPageProps> = ({
                     </div>
 
                     <span className="text-[10px] text-slate-500 shrink-0">{n.date}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Contact Requests (Panel 3) */}
+          <div className="bg-[#1C2541] border border-slate-700/80 rounded-3xl p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-teal-500/15 text-teal-400 flex items-center justify-center">
+                  <Phone className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Recent Contact Requests</h3>
+                  <p className="text-xs text-slate-400">Direct inquiries from residents</p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => onNavigate('admincontactrequests')}
+                className="text-xs text-teal-400 hover:text-teal-300 font-bold flex items-center gap-1 transition"
+              >
+                <span>View All</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5">
+              {metrics.recentContacts.length === 0 ? (
+                <div className="p-6 text-center text-slate-500 text-xs bg-[#0B132B] rounded-2xl border border-slate-800">
+                  No contact requests received yet.
+                </div>
+              ) : (
+                metrics.recentContacts.map((cr) => (
+                  <div
+                    key={cr.id}
+                    onClick={() => onNavigate('admincontactrequests')}
+                    className="p-3.5 rounded-xl bg-[#0B132B] border border-slate-800 hover:border-teal-500/40 transition cursor-pointer flex items-center justify-between gap-3 group"
+                  >
+                    <div>
+                      <div className="text-xs font-bold text-white group-hover:text-teal-300 transition">
+                        {cr.subject}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">
+                        {cr.tenantName} • Flat {cr.tenantNumber}
+                      </div>
+                    </div>
+
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                        cr.status === 'RESOLVED'
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                          : cr.status === 'IN PROGRESS'
+                          ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
+                          : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                      }`}
+                    >
+                      {cr.status}
+                    </span>
                   </div>
                 ))
               )}

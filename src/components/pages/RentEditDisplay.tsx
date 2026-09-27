@@ -67,13 +67,21 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
   const initialTable = sanitizeTable(table || initialTenantNumber);
   const [activeTable, setActiveTable] = useState<AllowedTable>(initialTable);
 
+  // Sync activeTable if props change
+  useEffect(() => {
+    if (initialTenantNumber || table) {
+      setActiveTable(sanitizeTable(table || initialTenantNumber));
+    }
+  }, [initialTenantNumber, table]);
+
   // Table records
   const [records, setRecords] = useState<RentRecord[]>([]);
   const [selectedRecordId, setSelectedRecordId] = useState<string | number | null>(null);
 
-  // Status/Alert Message
+  // Status/Alert Message & Action states
   const [message, setMessage] = useState<{ text: string; isError?: boolean } | null>(null);
   const [isSyncingSupabase, setIsSyncingSupabase] = useState<boolean>(false);
+  const [isAdding, setIsAdding] = useState<boolean>(false);
 
   const handleSyncSupabase = async () => {
     setIsSyncingSupabase(true);
@@ -110,23 +118,67 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
   const [modeOfPayment, setModeOfPayment] = useState<string>('');
   const [paid, setPaid] = useState<string>('PAID');
 
+  // Compute Outstanding Balance for NEW entry (sum of unpaid records)
+  const getCalculatedOutstandingBalance = useCallback((): number => {
+    return DatabaseService.getOutstandingRentBalance(activeTable);
+  }, [activeTable]);
+
   // Load records for active table
   const loadRecords = useCallback((tableName: AllowedTable) => {
     const data = DatabaseService.getRentRecordsByTable(tableName);
     setRecords(data);
   }, []);
 
+  // Update Total = Payment + Balance client-side
+  const updateCalculations = useCallback((newPaymentStr: string, currentBalanceStr: string) => {
+    const p = parseFloat(newPaymentStr);
+    const b = parseFloat(currentBalanceStr);
+    const payVal = isNaN(p) ? 0 : p;
+    const balVal = isNaN(b) ? 0 : b;
+    const tot = (payVal + balVal).toFixed(2);
+    setTotal(tot);
+  }, []);
+
+  // Reset form fields with tenant unit's current monthly rent and computed balance
+  const handleClear = useCallback(() => {
+    const today = new Date().toISOString().split('T')[0];
+    setDate(today);
+    setDay(calculateDayOfWeek(today));
+
+    // Auto-populate default monthly rent for current unit
+    const tenantNum = activeTable.replace('RENT_', '');
+    const infoRec = DatabaseService.getInfoRecord(tenantNum);
+    const rentNum = Number(infoRec?.CURRENT_RENT) || 0;
+    const defaultRent = rentNum > 0 ? rentNum : 5500;
+    const payStr = defaultRent.toFixed(2);
+    setPayment(payStr);
+
+    // Compute balance from outstanding unpaid sum
+    const outstanding = getCalculatedOutstandingBalance();
+    const balStr = outstanding.toFixed(2);
+    setBalance(balStr);
+    setTotal((defaultRent + outstanding).toFixed(2));
+
+    setModeOfPayment('UPI / PhonePe');
+    setPaid('PAID');
+    setSelectedRecordId(null);
+  }, [activeTable, getCalculatedOutstandingBalance]);
+
   // Initialize and reload on table switch
   useEffect(() => {
     loadRecords(activeTable);
     handleClear();
     setMessage(null);
-  }, [activeTable, loadRecords]);
+  }, [activeTable, loadRecords, handleClear]);
 
-  // Compute Outstanding Balance for NEW entry (sum of unpaid records)
-  const getCalculatedOutstandingBalance = useCallback((): number => {
-    return DatabaseService.getOutstandingRentBalance(activeTable);
-  }, [activeTable]);
+  // Keep records in sync with database changes
+  useEffect(() => {
+    const handleDbUpdate = () => {
+      loadRecords(activeTable);
+    };
+    window.addEventListener('tenant_hub_db_updated', handleDbUpdate);
+    return () => window.removeEventListener('tenant_hub_db_updated', handleDbUpdate);
+  }, [activeTable, loadRecords]);
 
   // Automatically update Day whenever Date changes
   const handleDateChange = (newDate: string) => {
@@ -135,37 +187,9 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
     setDay(dayOfWeek);
   };
 
-  // Update Total = Payment + Balance client-side
-  const updateCalculations = (newPaymentStr: string, currentBalanceStr: string) => {
-    const p = parseFloat(newPaymentStr);
-    const b = parseFloat(currentBalanceStr);
-    const payVal = isNaN(p) ? 0 : p;
-    const balVal = isNaN(b) ? 0 : b;
-    const tot = (payVal + balVal).toFixed(2);
-    setTotal(tot);
-  };
-
   const handlePaymentChange = (newPayment: string) => {
     setPayment(newPayment);
     updateCalculations(newPayment, balance);
-  };
-
-  // Reset form fields
-  const handleClear = () => {
-    const today = new Date().toISOString().split('T')[0];
-    setDate(today);
-    setDay(calculateDayOfWeek(today));
-    setPayment('');
-    
-    // When clearing for a fresh new record, set balance to outstanding unpaid sum
-    const outstanding = getCalculatedOutstandingBalance();
-    const balStr = outstanding.toFixed(2);
-    setBalance(balStr);
-    setTotal((0 + outstanding).toFixed(2));
-    
-    setModeOfPayment('UPI / PhonePe');
-    setPaid('PAID');
-    setSelectedRecordId(null);
   };
 
   // Select a row from the table
@@ -194,44 +218,71 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
   };
 
   // Add Button Handler
-  const handleAdd = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  const handleAdd = async (e?: React.FormEvent | React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    const targetDate = date || new Date().toISOString().split('T')[0];
     if (!date) {
-      setMessage({ text: 'Please select a valid Date.', isError: true });
+      setDate(targetDate);
+    }
+
+    let payVal = parseFloat(payment);
+    if (isNaN(payVal)) {
+      // If user cleared the input, fallback to unit's rent or 0
+      const tenantNum = activeTable.replace('RENT_', '');
+      const infoRec = DatabaseService.getInfoRecord(tenantNum);
+      const rentNum = Number(infoRec?.CURRENT_RENT) || 0;
+      payVal = rentNum > 0 ? rentNum : 0;
+      setPayment(payVal.toFixed(2));
+    }
+
+    if (payVal < 0) {
+      setMessage({ text: 'Please enter a valid non-negative Payment amount.', isError: true });
       return;
     }
 
-    const payVal = parseFloat(payment);
-    if (isNaN(payVal) || payVal < 0) {
-      setMessage({ text: 'Please enter a valid Payment amount.', isError: true });
-      return;
-    }
-
-    const currentDay = day || calculateDayOfWeek(date);
+    const currentDay = day || calculateDayOfWeek(targetDate);
     const outstanding = getCalculatedOutstandingBalance();
     const finalBalance = outstanding;
     const finalTotal = payVal + finalBalance;
     const normalizedPaid = (paid.trim() || 'NOT PAID').toUpperCase();
-    const normalizedMode = modeOfPayment.trim() || 'UPI';
+    const normalizedMode = modeOfPayment.trim() || 'UPI / PhonePe';
 
-    // Insert and trigger chronological balance recalculation
-    await DatabaseService.insertRentRecord(activeTable, {
-      DATE: date,
-      DAY: currentDay,
-      PAYMENT: payVal,
-      BALANCE: finalBalance,
-      TOTAL: finalTotal,
-      'MODE OF PAYMENT': normalizedMode,
-      PAID: normalizedPaid,
-    });
+    setIsAdding(true);
+    setMessage(null);
 
-    setMessage({
-      text: `Rent record for ${date} added and synced with Supabase for [${activeTable}]!`,
-      isError: false,
-    });
+    try {
+      // Insert and trigger chronological balance recalculation
+      const updated = await DatabaseService.insertRentRecord(activeTable, {
+        DATE: targetDate,
+        DAY: currentDay,
+        PAYMENT: payVal,
+        BALANCE: finalBalance,
+        TOTAL: finalTotal,
+        'MODE OF PAYMENT': normalizedMode,
+        PAID: normalizedPaid,
+      });
 
-    loadRecords(activeTable);
-    handleClear();
+      setRecords(updated);
+      setMessage({
+        text: `Rent record for ${targetDate} (₹${payVal.toLocaleString('en-IN')}) added successfully to [${activeTable}]!`,
+        isError: false,
+      });
+
+      handleClear();
+    } catch (err: any) {
+      console.error('Error adding rent record:', err);
+      setMessage({
+        text: `Error adding record: ${err?.message || 'Could not save record'}`,
+        isError: true,
+      });
+      loadRecords(activeTable);
+    } finally {
+      setIsAdding(false);
+    }
   };
 
   // Update Button Handler
@@ -428,7 +479,7 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
             )}
           </div>
 
-          <form onSubmit={handleAdd}>
+          <form noValidate onSubmit={(e) => { e.preventDefault(); handleAdd(e); }}>
             {/* 7 Required Form Fields in Exact Order */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
               {/* 1. Date */}
@@ -444,7 +495,6 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
                   type="date"
                   value={date}
                   onChange={(e) => handleDateChange(e.target.value)}
-                  required
                   className="w-full hub-input"
                 />
               </div>
@@ -483,7 +533,6 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
                   placeholder="0.00"
                   value={payment}
                   onChange={(e) => handlePaymentChange(e.target.value)}
-                  required
                   className="w-full hub-input font-mono"
                 />
               </div>
@@ -586,10 +635,22 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full">
                 <button
                   id="btnAdd"
-                  type="submit"
-                  className="w-full hub-btn hub-btn-primary min-h-[44px] py-2.5 px-4 text-xs sm:text-sm font-bold uppercase tracking-wider flex items-center justify-center shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer"
+                  type="button"
+                  disabled={isAdding}
+                  onClick={(e) => handleAdd(e)}
+                  className="w-full min-h-[44px] py-2.5 px-4 text-xs sm:text-sm font-extrabold uppercase tracking-wider flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 shadow-lg shadow-teal-500/25 hover:shadow-xl hover:shadow-teal-500/35 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-200 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed border border-teal-300/40 ring-1 ring-teal-400/30"
                 >
-                  ADD RECORD
+                  {isAdding ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin shrink-0 text-slate-950" />
+                      <span>ADDING...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 shrink-0 text-slate-950" />
+                      <span>ADD RECORD</span>
+                    </>
+                  )}
                 </button>
 
                 <button

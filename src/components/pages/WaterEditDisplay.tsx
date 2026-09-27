@@ -211,6 +211,15 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
     setMessage(null);
   }, [activeTable, loadRecords, handleClear]);
 
+  // Keep records synchronized with database updates
+  useEffect(() => {
+    const handleDbUpdate = () => {
+      loadRecords(activeTable);
+    };
+    window.addEventListener('tenant_hub_db_updated', handleDbUpdate);
+    return () => window.removeEventListener('tenant_hub_db_updated', handleDbUpdate);
+  }, [activeTable, loadRecords]);
+
   // Automatically update Day whenever Date changes
   const handleDateChange = (newDate: string) => {
     setDate(newDate);
@@ -345,26 +354,34 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
     const finalTotal = finalTotalBill + finalBalance;
     const normalizedPaid = (paid.trim() || 'NOT PAID').toUpperCase();
 
-    // Insert record and recalculate balances chronologically
-    await DatabaseService.insertWaterRecord(activeTable, {
-      DATE: date,
-      DAY: currentDay,
-      CURRENT_READINGS: currentVal,
-      PREVIOUS_READINGS: previousVal,
-      KITCHEN: kitchenVal,
-      TOTAL_BILL: finalTotalBill,
-      BALANCE: finalBalance,
-      TOTAL: finalTotal,
-      PAID: normalizedPaid,
-    });
+    try {
+      // Insert record and recalculate balances chronologically
+      const updated = await DatabaseService.insertWaterRecord(activeTable, {
+        DATE: date,
+        DAY: currentDay,
+        CURRENT_READINGS: currentVal,
+        PREVIOUS_READINGS: previousVal,
+        KITCHEN: kitchenVal,
+        TOTAL_BILL: finalTotalBill,
+        BALANCE: finalBalance,
+        TOTAL: finalTotal,
+        PAID: normalizedPaid,
+      });
 
-    setMessage({
-      text: `Water record for ${date} added successfully to [${activeTable}]!`,
-      isError: false,
-    });
+      setRecords(updated);
+      setMessage({
+        text: `Water record for ${date} added successfully to [${activeTable}]!`,
+        isError: false,
+      });
 
-    loadRecords(activeTable);
-    handleClear();
+      handleClear();
+    } catch (err: any) {
+      console.error('Error adding water record:', err);
+      setMessage({
+        text: `Error adding water record: ${err?.message || 'Could not save record'}`,
+        isError: true,
+      });
+    }
   };
 
   // Update Button Handler
@@ -593,7 +610,7 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
             )}
           </div>
 
-          <form onSubmit={handleAdd}>
+          <form noValidate onSubmit={(e) => { e.preventDefault(); handleAdd(e); }}>
             {/* 10 Required Form Fields in EXACT Order */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
               {/* 1. Date */}
@@ -609,7 +626,6 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
                   type="date"
                   value={date}
                   onChange={(e) => handleDateChange(e.target.value)}
-                  required
                   className="w-full hub-input font-medium"
                 />
               </div>
@@ -814,7 +830,8 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full">
                 <button
                   id="btnAdd"
-                  type="submit"
+                  type="button"
+                  onClick={(e) => handleAdd(e)}
                   className="w-full hub-btn hub-btn-primary min-h-[44px] py-2.5 px-4 text-xs sm:text-sm font-bold uppercase tracking-wider flex items-center justify-center shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer"
                 >
                   ADD RECORD

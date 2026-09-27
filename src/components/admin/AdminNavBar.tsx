@@ -12,6 +12,7 @@ import {
   LogOut,
   Menu,
   X,
+  Phone,
 } from 'lucide-react';
 import { DatabaseService } from '../../services/dbStore';
 import { ThemePalette } from '../ThemePalette';
@@ -32,6 +33,7 @@ export const AdminNavBar: React.FC<AdminNavBarProps> = ({
     pendingPayments: 0,
     openComplaints: 0,
     unreadNotifs: 0,
+    newContactRequests: 0,
   });
 
   const updateCounts = () => {
@@ -45,10 +47,14 @@ export const AdminNavBar: React.FC<AdminNavBarProps> = ({
       const notifs = DatabaseService.getNotifications('ADMIN');
       const unread = notifs.filter((n) => !n.isRead).length;
 
+      const contactReqs = DatabaseService.getContactRequests();
+      const newContacts = contactReqs.filter((r) => r.status === 'NEW').length;
+
       setCounts({
         pendingPayments: pendingPay,
         openComplaints: openMaint,
         unreadNotifs: unread,
+        newContactRequests: newContacts,
       });
     } catch {
       // ignore
@@ -88,6 +94,13 @@ export const AdminNavBar: React.FC<AdminNavBarProps> = ({
       icon: Bell,
       badge: counts.unreadNotifs > 0 ? counts.unreadNotifs : undefined,
       badgeColor: 'bg-red-500 text-white',
+    },
+    {
+      id: 'admincontactrequests',
+      label: 'Contact Requests',
+      icon: Phone,
+      badge: counts.newContactRequests > 0 ? counts.newContactRequests : undefined,
+      badgeColor: 'bg-teal-400 text-slate-950',
     },
     { id: 'passwordallpage', label: 'Credentials', icon: KeyRound },
   ];

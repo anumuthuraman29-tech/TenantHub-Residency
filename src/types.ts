@@ -71,6 +71,18 @@ export interface ComplaintRecord {
   resolvedAt?: string;
 }
 
+export interface ContactRequest {
+  id: string;
+  tenantNumber: string;
+  tenantName: string;
+  phone: string;
+  subject: string;
+  message: string;
+  status: 'NEW' | 'IN PROGRESS' | 'RESOLVED';
+  createdAt: string;
+  resolvedAt?: string;
+}
+
 export interface NoticeRecord {
   id: string;
   title: string;
@@ -99,6 +111,8 @@ export type PageId =
   | 'customerloginpage'
   | 'customermainpage'
   | 'customerinfo'
+  | 'contactadmin'
+  | 'admincontactrequests'
   | 'infoallpage'
   | 'infoeditpage'
   | 'rentallpage'

@@ -6,6 +6,7 @@ import {
   ComplaintRecord,
   NoticeRecord,
   NotificationRecord,
+  ContactRequest,
 } from '../types';
 import { TENANT_TABLE_MAP, getTenantTables, formatINR, isPaid } from '../data/tenantMapping';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
@@ -41,6 +42,7 @@ export interface SqlDatabaseState {
   complaints?: ComplaintRecord[];
   notices?: NoticeRecord[];
   notifications?: NotificationRecord[];
+  contactRequests?: ContactRequest[];
   adminUser: { username: string; passwordHash: string };
   passwords: Record<string, string>;
 }
@@ -50,6 +52,29 @@ const INITIAL_DB: SqlDatabaseState = {
     username: 'Anu',
     passwordHash: '9916913919',
   },
+  contactRequests: [
+    {
+      id: 'CR-101',
+      tenantNumber: '12',
+      tenantName: 'Bhavya',
+      phone: '9880011223',
+      subject: 'General Enquiry',
+      message: 'Hello Anu madam, I wanted to inquire about the upcoming festival maintenance schedule and visitor parking permissions.',
+      status: 'RESOLVED',
+      createdAt: '25 Sep 2026, 04:30 pm',
+      resolvedAt: '25 Sep 2026, 06:15 pm',
+    },
+    {
+      id: 'CR-102',
+      tenantNumber: '21',
+      tenantName: 'Suresh Kumar',
+      phone: '9741122334',
+      subject: 'Water / Electricity Issue',
+      message: 'Hi Admin, the overhead tank water pressure in the master bathroom seems lower than usual since yesterday morning.',
+      status: 'NEW',
+      createdAt: '27 Sep 2026, 09:15 am',
+    },
+  ],
   passwords: {
     '11': 'tenant11',
     '12': 'tenant12',
@@ -534,6 +559,7 @@ export class DatabaseService {
       if (!parsed.complaints || parsed.complaints.length === 0) parsed.complaints = INITIAL_DB.complaints;
       if (!parsed.notices || parsed.notices.length === 0) parsed.notices = INITIAL_DB.notices;
       if (!parsed.notifications || parsed.notifications.length === 0) parsed.notifications = INITIAL_DB.notifications;
+      if (!parsed.contactRequests || parsed.contactRequests.length === 0) parsed.contactRequests = INITIAL_DB.contactRequests;
 
       // Migrate tenant 32 spelling if cached as previous value
       if (parsed.infoTables?.INFO_32?.[0] && parsed.infoTables.INFO_32[0].NAME !== 'Ankith Das') {
@@ -590,6 +616,8 @@ export class DatabaseService {
     }
   }
 
+  private static hasAttemptedSeed = false;
+
   public static async syncFromSupabase(): Promise<boolean> {
     if (!isSupabaseConfigured() || !supabase) {
       return false;
@@ -598,15 +626,19 @@ export class DatabaseService {
       const db = this.getDB();
 
       // 1. Sync admin user
-      const { data: adminData } = await supabase.from('admin_users').select('*').limit(1);
-      if (adminData && adminData.length > 0) {
+      const { data: adminData, error: adminErr } = await supabase.from('admin_users').select('*').limit(1);
+      if (adminErr) {
+        console.warn('[Supabase] Could not sync admin_users:', adminErr.message);
+      } else if (adminData && adminData.length > 0) {
         db.adminUser.username = adminData[0].username;
         db.adminUser.passwordHash = adminData[0].password_hash;
       }
 
       // 2. Sync tenant passwords and customer logins
-      const { data: logins } = await supabase.from('customer_logins').select('*');
-      if (logins && logins.length > 0) {
+      const { data: logins, error: loginsErr } = await supabase.from('customer_logins').select('*');
+      if (loginsErr) {
+        console.warn('[Supabase] Could not sync customer_logins:', loginsErr.message);
+      } else if (logins && logins.length > 0) {
         db.customerLogins = logins.map((l: any) => ({
           id: l.id,
           USERNAME: l.tenant_number,
@@ -619,8 +651,10 @@ export class DatabaseService {
       }
 
       // 3. Sync tenant infos
-      const { data: infos } = await supabase.from('tenant_infos').select('*');
-      if (infos && infos.length > 0) {
+      const { data: infos, error: infosErr } = await supabase.from('tenant_infos').select('*');
+      if (infosErr) {
+        console.warn('[Supabase] Could not sync tenant_infos:', infosErr.message);
+      } else if (infos && infos.length > 0) {
         const newInfoTables: Record<string, CustomerInfoRecord[]> = {};
         for (const num of Object.keys(TENANT_TABLE_MAP)) {
           newInfoTables[`INFO_${num}`] = [];
@@ -644,8 +678,10 @@ export class DatabaseService {
       }
 
       // 4. Sync rent records
-      const { data: rents } = await supabase.from('rent_records').select('*');
-      if (rents && rents.length > 0) {
+      const { data: rents, error: rentsErr } = await supabase.from('rent_records').select('*');
+      if (rentsErr) {
+        console.warn('[Supabase] Could not sync rent_records:', rentsErr.message);
+      } else if (rents && rents.length > 0) {
         const newRentTables: Record<string, RentRecord[]> = {};
         for (const t of this.ALLOWED_RENT_TABLES) {
           newRentTables[t] = [];
@@ -693,8 +729,10 @@ export class DatabaseService {
       }
 
       // 5. Sync water records
-      const { data: waters } = await supabase.from('water_records').select('*');
-      if (waters && waters.length > 0) {
+      const { data: waters, error: watersErr } = await supabase.from('water_records').select('*');
+      if (watersErr) {
+        console.warn('[Supabase] Could not sync water_records:', watersErr.message);
+      } else if (waters && waters.length > 0) {
         const newWaterTables: Record<string, WaterRecord[]> = {};
         for (const t of this.ALLOWED_WATER_TABLES) {
           newWaterTables[t] = [];
@@ -727,16 +765,29 @@ export class DatabaseService {
         db.waterTables = newWaterTables;
       }
 
-      // Auto-seed if both rent and water tables in Supabase are currently empty
-      if ((!rents || rents.length === 0) && (!waters || waters.length === 0)) {
+      // Auto-seed only if tables exist and are empty without errors, and only once
+      if (
+        !this.hasAttemptedSeed &&
+        !rentsErr &&
+        !watersErr &&
+        rents &&
+        waters &&
+        rents.length === 0 &&
+        waters.length === 0
+      ) {
+        this.hasAttemptedSeed = true;
         console.log('[Supabase] Initializing database tables with seed data...');
-        await this.pushAllToSupabase();
-        return this.syncFromSupabase();
+        const res = await this.pushAllToSupabase();
+        if (res.success) {
+          return this.syncFromSupabase();
+        }
       }
 
       // 6. Sync payment submissions
-      const { data: submissions } = await supabase.from('payment_submissions').select('*');
-      if (submissions) {
+      const { data: submissions, error: submissionsErr } = await supabase.from('payment_submissions').select('*');
+      if (submissionsErr) {
+        console.warn('[Supabase] Could not sync payment_submissions:', submissionsErr.message);
+      } else if (submissions) {
         db.paymentSubmissions = submissions.map((s: any) => ({
           id: s.id,
           tenantNumber: s.tenant_number,
@@ -748,6 +799,42 @@ export class DatabaseService {
           timestamp: s.created_at || new Date().toISOString(),
           status: s.status || 'PENDING',
         })).sort((a: any, b: any) => (new Date(b.timestamp).getTime() || 0) - (new Date(a.timestamp).getTime() || 0));
+      }
+
+      // 7. Sync contact requests (if table exists)
+      try {
+        const { data: contactReqs, error: crErr } = await supabase.from('contact_requests').select('*');
+        if (!crErr && contactReqs && contactReqs.length > 0) {
+          db.contactRequests = contactReqs.map((cr: any) => ({
+            id: cr.id,
+            tenantNumber: cr.tenant_number,
+            tenantName: cr.tenant_name,
+            phone: cr.phone,
+            subject: cr.subject,
+            message: cr.message,
+            status: cr.status || 'NEW',
+            createdAt: cr.created_at
+              ? new Date(cr.created_at).toLocaleString([], {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })
+              : new Date().toLocaleString(),
+            resolvedAt: cr.resolved_at
+              ? new Date(cr.resolved_at).toLocaleString([], {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })
+              : undefined,
+          })).sort((a: any, b: any) => (b.id > a.id ? 1 : -1));
+        }
+      } catch {
+        // Table may not yet be created on remote Supabase - local cache handles it
       }
 
       this.saveDB(db);
@@ -961,35 +1048,54 @@ export class DatabaseService {
     const payVal = Number(record.PAYMENT) || 0;
     const isPaidStatus = (record.PAID || '').toUpperCase() === 'PAID';
     const balanceVal = isPaidStatus ? 0 : (Number(record.BALANCE) || 0);
+    const totalVal = Number(record.TOTAL) || (payVal + balanceVal);
 
+    // 1. Always update local DB & localStorage immediately so the UI reliably has the record
+    const db = this.getDB();
+    if (!db.rentTables[validTable]) db.rentTables[validTable] = [];
+    const newRecord: RentRecord = {
+      ...record,
+      id: newId,
+      DATE: record.DATE,
+      DAY: record.DAY || calculateDayOfWeek(record.DATE),
+      PAYMENT: payVal,
+      BALANCE: balanceVal,
+      TOTAL: totalVal,
+      'MODE OF PAYMENT': record['MODE OF PAYMENT'] || 'UPI',
+      PAID: (record.PAID || 'NOT PAID').toUpperCase(),
+    };
+    db.rentTables[validTable].push(newRecord);
+    this.saveDB(db);
+    const updatedList = this.recalculateRentTable(validTable);
+
+    // 2. Synchronize to Supabase asynchronously in background without blocking UI
     if (isSupabaseConfigured() && supabase) {
       const row = {
         id: newId,
         table_name: validTable,
         tenant_number: tenantNum,
         date: record.DATE,
-        day: record.DAY || calculateDayOfWeek(record.DATE),
         previous_balance: balanceVal,
         payment: payVal,
         unpaid: isPaidStatus ? 0 : balanceVal,
         paid: (record.PAID || 'NOT PAID').toUpperCase(),
         mode_of_payment: record['MODE OF PAYMENT'] || 'UPI',
       };
-      const { error } = await supabase.from('rent_records').insert([row]);
-      if (error) {
-        console.error('Supabase insertRentRecord error:', error);
-        throw new Error(error.message);
-      }
-      await this.syncFromSupabase();
-      return this.getRentRecordsByTable(validTable);
+      (async () => {
+        try {
+          const { error } = await supabase.from('rent_records').insert([row]);
+          if (error) {
+            console.warn('[Supabase] insertRentRecord cloud sync warning:', error.message);
+          } else {
+            console.log(`[Supabase] insertRentRecord successfully synced to cloud for ${validTable}`);
+          }
+        } catch (err: any) {
+          console.warn('[Supabase] insertRentRecord network warning:', err?.message);
+        }
+      })();
     }
 
-    // Fallback if Supabase not configured
-    const db = this.getDB();
-    if (!db.rentTables[validTable]) db.rentTables[validTable] = [];
-    db.rentTables[validTable].push({ ...record, id: newId });
-    this.saveDB(db);
-    return this.recalculateRentTable(validTable);
+    return updatedList;
   }
 
   public static async updateRentRecord(
@@ -1003,10 +1109,18 @@ export class DatabaseService {
     const currentItem = list.find((r) => String(r.id) === String(idOrDate) || r.DATE === String(idOrDate));
     const targetId = currentItem?.id || String(idOrDate);
 
+    // 1. Always update local DB first
+    const idx = list.findIndex((r) => String(r.id) === String(targetId) || r.DATE === String(idOrDate));
+    if (idx !== -1) {
+      list[idx] = { ...list[idx], ...record };
+      this.saveDB(db);
+    }
+    const updatedList = this.recalculateRentTable(validTable);
+
+    // 2. Sync to Supabase in background
     if (isSupabaseConfigured() && supabase) {
       const updatePayload: Record<string, any> = {};
       if (record.DATE !== undefined) updatePayload.date = record.DATE;
-      if (record.DAY !== undefined) updatePayload.day = record.DAY;
       if (record.PAYMENT !== undefined) updatePayload.payment = Number(record.PAYMENT) || 0;
       if (record.BALANCE !== undefined) updatePayload.previous_balance = Number(record.BALANCE) || 0;
       if (record.PAID !== undefined) {
@@ -1016,22 +1130,17 @@ export class DatabaseService {
       }
       if (record['MODE OF PAYMENT'] !== undefined) updatePayload.mode_of_payment = record['MODE OF PAYMENT'];
 
-      const { error } = await supabase.from('rent_records').update(updatePayload).eq('id', String(targetId));
-      if (error) {
-        console.error('Supabase updateRentRecord error:', error);
-        throw new Error(error.message);
-      }
-      await this.syncFromSupabase();
-      return this.getRentRecordsByTable(validTable);
+      (async () => {
+        try {
+          const { error } = await supabase.from('rent_records').update(updatePayload).eq('id', String(targetId));
+          if (error) console.warn('[Supabase] updateRentRecord warning:', error.message);
+        } catch (err: any) {
+          console.warn('[Supabase] updateRentRecord network warning:', err?.message);
+        }
+      })();
     }
 
-    // Fallback
-    const idx = list.findIndex((r) => String(r.id) === String(idOrDate) || r.DATE === String(idOrDate));
-    if (idx !== -1) {
-      list[idx] = { ...list[idx], ...record };
-      this.saveDB(db);
-    }
-    return this.recalculateRentTable(validTable);
+    return updatedList;
   }
 
   public static async deleteRentRecord(
@@ -1044,24 +1153,28 @@ export class DatabaseService {
     const currentItem = list.find((r) => String(r.id) === String(idOrDate) || r.DATE === String(idOrDate));
     const targetId = currentItem?.id || String(idOrDate);
 
-    if (isSupabaseConfigured() && supabase) {
-      const { error } = await supabase.from('rent_records').delete().eq('id', String(targetId));
-      if (error) {
-        console.error('Supabase deleteRentRecord error:', error);
-        throw new Error(error.message);
-      }
-      await this.syncFromSupabase();
-      return this.getRentRecordsByTable(validTable);
-    }
-
-    // Fallback
+    // 1. Delete from local DB first
     if (db.rentTables[validTable]) {
       db.rentTables[validTable] = db.rentTables[validTable].filter(
-        (r) => String(r.id) !== String(idOrDate) && r.DATE !== String(idOrDate)
+        (r) => String(r.id) !== String(targetId) && r.DATE !== String(idOrDate)
       );
       this.saveDB(db);
     }
-    return this.recalculateRentTable(validTable);
+    const updatedList = this.recalculateRentTable(validTable);
+
+    // 2. Delete from Supabase in background
+    if (isSupabaseConfigured() && supabase) {
+      (async () => {
+        try {
+          const { error } = await supabase.from('rent_records').delete().eq('id', String(targetId));
+          if (error) console.warn('[Supabase] deleteRentRecord warning:', error.message);
+        } catch (err: any) {
+          console.warn('[Supabase] deleteRentRecord network warning:', err?.message);
+        }
+      })();
+    }
+
+    return updatedList;
   }
 
   // Water CRUD
@@ -1266,13 +1379,32 @@ export class DatabaseService {
     const balance = isPaidStatus ? 0 : (Number(record.BALANCE) || 0);
     const total = isPaidStatus ? 0 : (Number(record.TOTAL) || (totalBill + balance));
 
+    // 1. Always update local DB & localStorage immediately so the UI reliably has the record
+    const db = this.getDB();
+    if (!db.waterTables[validTable]) db.waterTables[validTable] = [];
+    const newRecord: WaterRecord = {
+      ...record,
+      id: newId,
+      DATE: record.DATE,
+      DAY: record.DAY || calculateDayOfWeek(record.DATE),
+      PREVIOUS_READINGS: prevReading,
+      CURRENT_READINGS: currReading,
+      TOTAL_BILL: totalBill,
+      BALANCE: balance,
+      TOTAL: total,
+      PAID: (record.PAID || 'NOT PAID').toUpperCase(),
+    };
+    db.waterTables[validTable].push(newRecord);
+    this.saveDB(db);
+    const updatedList = this.recalculateWaterTable(validTable);
+
+    // 2. Synchronize to Supabase in background without blocking UI
     if (isSupabaseConfigured() && supabase) {
       const row = {
         id: newId,
         table_name: validTable,
         tenant_number: tenantNum,
         date: record.DATE,
-        day: record.DAY || calculateDayOfWeek(record.DATE),
         previous_reading: prevReading,
         current_reading: currReading,
         units: units,
@@ -1282,21 +1414,17 @@ export class DatabaseService {
         paid: (record.PAID || 'NOT PAID').toUpperCase(),
         total: total,
       };
-      const { error } = await supabase.from('water_records').insert([row]);
-      if (error) {
-        console.error('Supabase insertWaterRecord error:', error);
-        throw new Error(error.message);
-      }
-      await this.syncFromSupabase();
-      return this.getWaterRecordsByTable(validTable);
+      (async () => {
+        try {
+          const { error } = await supabase.from('water_records').insert([row]);
+          if (error) console.warn('[Supabase] insertWaterRecord warning:', error.message);
+        } catch (err: any) {
+          console.warn('[Supabase] insertWaterRecord network warning:', err?.message);
+        }
+      })();
     }
 
-    // Fallback
-    const db = this.getDB();
-    if (!db.waterTables[validTable]) db.waterTables[validTable] = [];
-    db.waterTables[validTable].push({ ...record, id: newId });
-    this.saveDB(db);
-    return this.recalculateWaterTable(validTable);
+    return updatedList;
   }
 
   public static async updateWaterRecord(
@@ -1310,10 +1438,18 @@ export class DatabaseService {
     const currentItem = list.find((r) => String(r.id) === String(idOrDate) || r.DATE === String(idOrDate));
     const targetId = currentItem?.id || String(idOrDate);
 
+    // 1. Update local DB first
+    const idx = list.findIndex((r) => String(r.id) === String(targetId) || r.DATE === String(idOrDate));
+    if (idx !== -1) {
+      list[idx] = { ...list[idx], ...record };
+      this.saveDB(db);
+    }
+    const updatedList = this.recalculateWaterTable(validTable);
+
+    // 2. Sync to Supabase in background
     if (isSupabaseConfigured() && supabase) {
       const updatePayload: Record<string, any> = {};
       if (record.DATE !== undefined) updatePayload.date = record.DATE;
-      if (record.DAY !== undefined) updatePayload.day = record.DAY;
       if (record.PREVIOUS_READINGS !== undefined) updatePayload.previous_reading = Number(record.PREVIOUS_READINGS) || 0;
       if (record.CURRENT_READINGS !== undefined) updatePayload.current_reading = Number(record.CURRENT_READINGS) || 0;
       if (record.TOTAL_BILL !== undefined) updatePayload.total_bill = Number(record.TOTAL_BILL) || 0;
@@ -1327,22 +1463,17 @@ export class DatabaseService {
       }
       if (record.TOTAL !== undefined) updatePayload.total = Number(record.TOTAL) || 0;
 
-      const { error } = await supabase.from('water_records').update(updatePayload).eq('id', String(targetId));
-      if (error) {
-        console.error('Supabase updateWaterRecord error:', error);
-        throw new Error(error.message);
-      }
-      await this.syncFromSupabase();
-      return this.getWaterRecordsByTable(validTable);
+      (async () => {
+        try {
+          const { error } = await supabase.from('water_records').update(updatePayload).eq('id', String(targetId));
+          if (error) console.warn('[Supabase] updateWaterRecord warning:', error.message);
+        } catch (err: any) {
+          console.warn('[Supabase] updateWaterRecord network warning:', err?.message);
+        }
+      })();
     }
 
-    // Fallback
-    const idx = list.findIndex((r) => String(r.id) === String(idOrDate) || r.DATE === String(idOrDate));
-    if (idx !== -1) {
-      list[idx] = { ...list[idx], ...record };
-      this.saveDB(db);
-    }
-    return this.recalculateWaterTable(validTable);
+    return updatedList;
   }
 
   public static async deleteWaterRecord(
@@ -1355,24 +1486,28 @@ export class DatabaseService {
     const currentItem = list.find((r) => String(r.id) === String(idOrDate) || r.DATE === String(idOrDate));
     const targetId = currentItem?.id || String(idOrDate);
 
-    if (isSupabaseConfigured() && supabase) {
-      const { error } = await supabase.from('water_records').delete().eq('id', String(targetId));
-      if (error) {
-        console.error('Supabase deleteWaterRecord error:', error);
-        throw new Error(error.message);
-      }
-      await this.syncFromSupabase();
-      return this.getWaterRecordsByTable(validTable);
-    }
-
-    // Fallback
+    // 1. Delete from local DB first
     if (db.waterTables[validTable]) {
       db.waterTables[validTable] = db.waterTables[validTable].filter(
-        (r) => String(r.id) !== String(idOrDate) && r.DATE !== String(idOrDate)
+        (r) => String(r.id) !== String(targetId) && r.DATE !== String(idOrDate)
       );
       this.saveDB(db);
     }
-    return this.recalculateWaterTable(validTable);
+    const updatedList = this.recalculateWaterTable(validTable);
+
+    // 2. Delete from Supabase if configured
+    if (isSupabaseConfigured() && supabase) {
+      try {
+        const { error } = await supabase.from('water_records').delete().eq('id', String(targetId));
+        if (error) {
+          console.warn('[Supabase] deleteWaterRecord warning:', error.message);
+        }
+      } catch (err: any) {
+        console.warn('[Supabase] deleteWaterRecord network warning:', err?.message);
+      }
+    }
+
+    return updatedList;
   }
 
   // Info CRUD (INFO_11 .. INFO_41)
@@ -2070,6 +2205,120 @@ export class DatabaseService {
       db.notifications = db.notifications.filter((n) => n.tenantNumber !== tenantNumber);
     }
     this.saveDB(db);
+  }
+
+  // Contact Admin Requests
+  public static getContactRequests(tenantNumber?: string): ContactRequest[] {
+    const db = this.getDB();
+    const list = db.contactRequests || [];
+    if (!tenantNumber) return list;
+    return list.filter((r) => r.tenantNumber === tenantNumber);
+  }
+
+  public static async submitContactRequest(data: {
+    tenantNumber: string;
+    tenantName: string;
+    phone: string;
+    subject: string;
+    message: string;
+  }): Promise<ContactRequest> {
+    const db = this.getDB();
+    if (!db.contactRequests) db.contactRequests = [];
+    const newReq: ContactRequest = {
+      id: `CR-${Date.now().toString().slice(-5)}`,
+      tenantNumber: data.tenantNumber,
+      tenantName: data.tenantName,
+      phone: data.phone,
+      subject: data.subject,
+      message: data.message,
+      status: 'NEW',
+      createdAt: new Date().toLocaleString([], {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    };
+    db.contactRequests.unshift(newReq);
+    this.saveDB(db);
+
+    // Create an in-app notification for the administrator
+    this.addNotification({
+      tenantNumber: 'ADMIN',
+      title: `New Contact Request: ${data.subject} 📩`,
+      message: `${data.tenantName} (Flat ${data.tenantNumber}) submitted: "${data.message.slice(0, 90)}${data.message.length > 90 ? '...' : ''}"`,
+      type: 'NOTICE',
+      urgency: data.subject === 'Emergency' ? 'URGENT' : 'NORMAL',
+    });
+
+    // Optionally sync to Supabase if table exists
+    if (isSupabaseConfigured() && supabase) {
+      try {
+        await supabase.from('contact_requests').insert([
+          {
+            id: newReq.id,
+            tenant_number: newReq.tenantNumber,
+            tenant_name: newReq.tenantName,
+            phone: newReq.phone,
+            subject: newReq.subject,
+            message: newReq.message,
+            status: newReq.status,
+            created_at: new Date().toISOString(),
+          },
+        ]);
+      } catch {
+        // Safe fallback - local storage preserved
+      }
+    }
+
+    return newReq;
+  }
+
+  public static async updateContactRequestStatus(
+    id: string,
+    status: 'NEW' | 'IN PROGRESS' | 'RESOLVED'
+  ): Promise<void> {
+    const db = this.getDB();
+    if (!db.contactRequests) return;
+    const item = db.contactRequests.find((r) => r.id === id);
+    if (item) {
+      item.status = status;
+      if (status === 'RESOLVED') {
+        item.resolvedAt = new Date().toLocaleString([], {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+      }
+      this.saveDB(db);
+
+      // In-app notification for the tenant
+      this.addNotification({
+        tenantNumber: item.tenantNumber,
+        title: `Contact Request Updated: ${status} 📋`,
+        message: `Your request regarding "${item.subject}" has been marked as ${status} by admin.`,
+        type: 'NOTICE',
+        urgency: 'NORMAL',
+      });
+
+      // Sync status to Supabase if configured
+      if (isSupabaseConfigured() && supabase) {
+        try {
+          await supabase
+            .from('contact_requests')
+            .update({
+              status,
+              resolved_at: status === 'RESOLVED' ? new Date().toISOString() : null,
+            })
+            .eq('id', id);
+        } catch {
+          // Safe fallback
+        }
+      }
+    }
   }
 
   public static resetDefaults() {
