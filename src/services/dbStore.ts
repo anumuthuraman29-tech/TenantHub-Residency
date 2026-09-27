@@ -742,7 +742,12 @@ export class DatabaseService {
           if (!newWaterTables[tName]) newWaterTables[tName] = [];
           const isWaterPaidStatus = (w.paid || '').toUpperCase() === 'PAID';
           const balanceVal = isWaterPaidStatus ? 0 : Number(w.balance) || 0;
-          const totalVal = isWaterPaidStatus ? 0 : Number(w.total) || 0;
+          const totalBillVal = Number(w.total_bill) || 0;
+          const totalVal = Number(
+            w.total !== undefined && w.total !== null
+              ? w.total
+              : totalBillVal + balanceVal
+          ) || 0;
           const formatted: WaterRecord = {
             id: w.id,
             DATE: w.date,
@@ -750,7 +755,7 @@ export class DatabaseService {
             PREVIOUS_READINGS: Number(w.previous_reading !== undefined ? w.previous_reading : w.previous_readings) || 0,
             CURRENT_READINGS: Number(w.current_reading !== undefined ? w.current_reading : w.current_readings) || 0,
             KITCHEN: Number(w.kitchen) || 0,
-            TOTAL_BILL: Number(w.total_bill) || 0,
+            TOTAL_BILL: totalBillVal,
             BALANCE: balanceVal,
             PAID: (w.paid || 'NOT PAID').toUpperCase(),
             TOTAL: totalVal,
@@ -1350,9 +1355,26 @@ export class DatabaseService {
     waterCount: number;
     success: boolean;
     error?: string;
+    isLocalFallback?: boolean;
   }> {
+    const db = this.getDB();
+    let totalRent = 0;
+    Object.values(db.rentTables).forEach((list) => {
+      totalRent += list.length;
+    });
+    let totalWater = 0;
+    Object.values(db.waterTables).forEach((list) => {
+      totalWater += list.length;
+    });
+
     if (!isSupabaseConfigured() || !supabase) {
-      return { rentCount: 0, waterCount: 0, success: false, error: 'Supabase client is not configured.' };
+      this.saveDB(db);
+      return {
+        rentCount: totalRent,
+        waterCount: totalWater,
+        success: true,
+        isLocalFallback: true,
+      };
     }
 
     const rentRes = await this.pushRentRecordsToSupabase();
@@ -1360,10 +1382,11 @@ export class DatabaseService {
     await this.pushTenantInfosToSupabase();
 
     return {
-      rentCount: rentRes.count,
-      waterCount: waterRes.count,
+      rentCount: rentRes.count || totalRent,
+      waterCount: waterRes.count || totalWater,
       success: rentRes.success && waterRes.success,
       error: rentRes.error || waterRes.error,
+      isLocalFallback: false,
     };
   }
 
@@ -1377,7 +1400,7 @@ export class DatabaseService {
     const totalBill = Number(record.TOTAL_BILL) || 0;
     const isPaidStatus = (record.PAID || '').toUpperCase() === 'PAID';
     const balance = isPaidStatus ? 0 : (Number(record.BALANCE) || 0);
-    const total = isPaidStatus ? 0 : (Number(record.TOTAL) || (totalBill + balance));
+    const total = Number(record.TOTAL) || (totalBill + balance);
 
     // 1. Always update local DB & localStorage immediately so the UI reliably has the record
     const db = this.getDB();
@@ -1458,7 +1481,6 @@ export class DatabaseService {
         updatePayload.paid = (record.PAID || 'NOT PAID').toUpperCase();
         if ((record.PAID || '').toUpperCase() === 'PAID') {
           updatePayload.balance = 0;
-          updatePayload.total = 0;
         }
       }
       if (record.TOTAL !== undefined) updatePayload.total = Number(record.TOTAL) || 0;

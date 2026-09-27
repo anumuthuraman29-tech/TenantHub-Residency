@@ -129,6 +129,14 @@ export const RentPageDisplay: React.FC<CustomerViewProps> = ({ tenantNumber, onN
 };
 
 export const WaterBillPageDisplay: React.FC<CustomerViewProps> = ({ tenantNumber, onNavigate }) => {
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const handleUpdate = () => setTick((t) => t + 1);
+    window.addEventListener('tenant_hub_db_updated', handleUpdate);
+    return () => window.removeEventListener('tenant_hub_db_updated', handleUpdate);
+  }, []);
+
   const displayName = DatabaseService.getTenantDisplayName(tenantNumber);
   const records = DatabaseService.getWaterRecords(tenantNumber);
 
@@ -149,13 +157,22 @@ export const WaterBillPageDisplay: React.FC<CustomerViewProps> = ({ tenantNumber
           </div>
         </div>
 
-        <button
-          onClick={() => onNavigate('paypage')}
-          className="py-2 px-4 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition shadow-md"
-        >
-          <CreditCard className="w-4 h-4" />
-          <span>Pay Utility Now</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <RefreshDataButton
+            onRefresh={async () => {
+              await DatabaseService.syncFromSupabase();
+              setTick((t) => t + 1);
+            }}
+            size="sm"
+          />
+          <button
+            onClick={() => onNavigate('paypage')}
+            className="py-2 px-4 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition shadow-md"
+          >
+            <CreditCard className="w-4 h-4" />
+            <span>Pay Utility Now</span>
+          </button>
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-slate-800 mb-6 bg-slate-900/60">

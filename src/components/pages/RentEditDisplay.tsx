@@ -115,26 +115,17 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
   }, []);
 
   const handleSyncSupabase = async () => {
-    if (!isSupabaseConfigured()) {
-      setIsConfigModalOpen(true);
-      setMessage({
-        text: 'Notice: Supabase cloud is not configured. Tenant Hub is operating smoothly in Local Storage mode (all rent records are saved locally in your browser). You can configure cloud sync below or continue using local storage.',
-        isError: false,
-      });
-      return;
-    }
-
     setIsSyncingSupabase(true);
     try {
       const result = await DatabaseService.pushAllToSupabase();
       if (result.success) {
         setMessage({
-          text: `Direct sync complete! Synced ${result.rentCount} rent records and ${result.waterCount} water records directly to Supabase cloud.`,
+          text: `Direct sync complete! Synced ${result.rentCount} rent records and ${result.waterCount} water records directly to Supabase.`,
           isError: false,
         });
       } else {
         setMessage({
-          text: `Supabase cloud sync info: ${result.error || 'Check network connection'}. Local records remain safe and intact.`,
+          text: `Supabase sync alert: ${result.error || 'Check network connection'}`,
           isError: true,
         });
       }
@@ -511,34 +502,15 @@ export const RentEditDisplay: React.FC<RentEditDisplayProps> = ({
               type="button"
               onClick={handleSyncSupabase}
               disabled={isSyncingSupabase}
-              className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm font-bold transition-all shadow-md active:scale-95 disabled:opacity-50 cursor-pointer min-h-[42px] whitespace-nowrap ${
-                isCloudConfigured
-                  ? 'bg-emerald-600/30 hover:bg-emerald-600/50 border-emerald-400/40 text-emerald-100'
-                  : 'bg-teal-950/60 hover:bg-teal-900/60 border-teal-500/40 text-teal-200'
-              }`}
-              title={
-                isCloudConfigured
-                  ? 'Connected to Supabase cloud. Click to sync all local records.'
-                  : 'Currently in Local Storage mode. Click to configure cloud sync or view settings.'
-              }
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-400/40 text-emerald-100 text-xs sm:text-sm font-bold transition-all shadow-md active:scale-95 disabled:opacity-50 cursor-pointer min-h-[42px] whitespace-nowrap"
+              title="Sync all local records directly to Supabase cloud database"
             >
               {isSyncingSupabase ? (
                 <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
-              ) : isCloudConfigured ? (
-                <Cloud className="w-4 h-4 text-emerald-300 shrink-0" />
               ) : (
-                <HardDrive className="w-4 h-4 text-teal-400 shrink-0" />
+                <Cloud className="w-4 h-4 text-emerald-300 shrink-0" />
               )}
-              <span>{isSyncingSupabase ? 'Syncing...' : isCloudConfigured ? 'Sync Cloud' : 'Cloud Sync'}</span>
-              <span
-                className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-semibold ${
-                  isCloudConfigured
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                    : 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
-                }`}
-              >
-                {isCloudConfigured ? 'Connected' : 'Local Mode'}
-              </span>
+              <span>{isSyncingSupabase ? 'Syncing...' : 'Sync Supabase'}</span>
             </button>
 
             <button
