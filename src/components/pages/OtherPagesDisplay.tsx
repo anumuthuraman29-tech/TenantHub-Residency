@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { DatabaseService, CustomerLoginRecord } from '../../services/dbStore';
+import { AdminNavBar } from '../admin/AdminNavBar';
 
 interface CommonProps {
   onNavigate: (page: string) => void;
@@ -111,8 +112,9 @@ export const PasswordAllPageDisplay: React.FC<CommonProps> = ({ onNavigate }) =>
   };
 
   return (
-    <div className="relative z-10 w-full max-w-4xl mx-auto my-8 p-6 sm:p-8 hub-panel">
-      <h2 className="text-xl sm:text-2xl font-bold text-center tracking-wider uppercase mb-2 text-white">
+    <AdminNavBar currentPage="passwordallpage" onNavigate={onNavigate} onLogout={() => onNavigate('login')}>
+      <div className="relative z-10 w-full max-w-4xl mx-auto my-4 p-6 sm:p-8 hub-panel">
+        <h2 className="text-xl sm:text-2xl font-bold text-center tracking-wider uppercase mb-2 text-white">
         CUSTOMER LOGIN & PASSWORD MANAGEMENT (ADMIN)
       </h2>
       <p className="text-center text-xs text-white/80 mb-6">
@@ -235,5 +237,6 @@ export const PasswordAllPageDisplay: React.FC<CommonProps> = ({ onNavigate }) =>
         </table>
       </div>
     </div>
+    </AdminNavBar>
   );
 };

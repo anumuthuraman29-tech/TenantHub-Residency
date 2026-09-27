@@ -105,14 +105,12 @@ export const AdminPaymentVerifyDisplay: React.FC<AdminPaymentVerifyProps> = ({
   }, [submissions]);
 
   return (
-    <div className="min-h-screen bg-[#0B132B] text-slate-100 flex flex-col">
-      <AdminNavBar
-        currentPage="adminpaymentverify"
-        onNavigate={onNavigate}
-        onLogout={onLogout || (() => onNavigate('login'))}
-      />
-
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <AdminNavBar
+      currentPage="adminpaymentverify"
+      onNavigate={onNavigate}
+      onLogout={onLogout || (() => onNavigate('login'))}
+    >
+      <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div>
@@ -340,7 +338,7 @@ export const AdminPaymentVerifyDisplay: React.FC<AdminPaymentVerifyProps> = ({
             </tbody>
           </table>
         </div>
-      </main>
+      </div>
 
       {/* Reject Reason Modal */}
       {rejectModalId && (
@@ -387,6 +385,6 @@ export const AdminPaymentVerifyDisplay: React.FC<AdminPaymentVerifyProps> = ({
           </div>
         </div>
       )}
-    </div>
+    </AdminNavBar>
   );
 };

@@ -102,10 +102,8 @@ export const AdminMainPageDisplay: React.FC<AdminMainPageProps> = ({
   }, [refreshKey]);
 
   return (
-    <div className="min-h-screen bg-[#0B132B] text-slate-100 flex flex-col">
-      <AdminNavBar currentPage="adminmainpage" onNavigate={onNavigate} onLogout={onLogout} />
-
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <AdminNavBar currentPage="adminmainpage" onNavigate={onNavigate} onLogout={onLogout}>
+      <div className="space-y-8">
         {/* Welcome & Overview Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-[#1C2541] via-[#1C2541]/90 to-[#0B132B] p-6 sm:p-8 rounded-3xl border border-cyan-500/30 shadow-2xl relative overflow-hidden">
           <div className="relative z-10">
@@ -712,7 +710,7 @@ export const AdminMainPageDisplay: React.FC<AdminMainPageProps> = ({
             </div>
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </AdminNavBar>
   );
 };

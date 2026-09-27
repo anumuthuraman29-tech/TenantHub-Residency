@@ -1,8 +1,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Read Vite environment variables with project fallbacks
-const defaultUrl = 'https://xcpvuqkpdwkwlpgxaufx.supabase.co';
-const defaultKey = 'sb_publishable_jUEvpCHbZm6soGwKusc7qA_k324GWh3';
+// Read Vite environment variables with safe defaults
+const defaultUrl = '';
+const defaultKey = '';
 
 const envUrl =
   (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_SUPABASE_URL) ||

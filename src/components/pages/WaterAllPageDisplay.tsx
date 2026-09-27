@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DatabaseService } from '../../services/dbStore';
 import { TENANT_TABLE_MAP, formatINR, isPaid } from '../../data/tenantMapping';
 import { RefreshDataButton } from '../common/RefreshDataButton';
+import { AdminNavBar } from '../admin/AdminNavBar';
 
 interface WaterAllPageProps {
   onNavigate: (page: string, param?: string) => void;
@@ -28,8 +29,9 @@ export const WaterAllPageDisplay: React.FC<WaterAllPageProps> = ({ onNavigate, o
   };
 
   return (
-    <div className="relative z-10 w-full max-w-5xl mx-auto my-6 p-6 sm:p-8 hub-panel">
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4 pb-3 border-b border-white/10">
+    <AdminNavBar currentPage="waterallpage" onNavigate={onNavigate} onLogout={() => onNavigate('login')}>
+      <div className="relative z-10 w-full max-w-5xl mx-auto my-2 p-6 sm:p-8 hub-panel">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4 pb-3 border-b border-white/10">
         <div>
           <h1 className="text-xl sm:text-2xl font-extrabold tracking-wider uppercase text-white drop-shadow-md">
             WATER BILL DIRECTORY & OVERVIEW (ADMIN)
@@ -142,5 +144,6 @@ export const WaterAllPageDisplay: React.FC<WaterAllPageProps> = ({ onNavigate, o
         </button>
       </div>
     </div>
+    </AdminNavBar>
   );
 };

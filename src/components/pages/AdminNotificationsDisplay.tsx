@@ -81,10 +81,8 @@ export const AdminNotificationsDisplay: React.FC<AdminNotificationsProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#0B132B] text-slate-100 flex flex-col">
-      <AdminNavBar currentPage="adminnotifications" onNavigate={onNavigate} onLogout={onLogout} />
-
-      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <AdminNavBar currentPage="adminnotifications" onNavigate={onNavigate} onLogout={onLogout}>
+      <div className="space-y-6">
         {/* Header Bar */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div>
@@ -234,7 +232,7 @@ export const AdminNotificationsDisplay: React.FC<AdminNotificationsProps> = ({
             })
           )}
         </div>
-      </main>
-    </div>
+      </div>
+    </AdminNavBar>
   );
 };
