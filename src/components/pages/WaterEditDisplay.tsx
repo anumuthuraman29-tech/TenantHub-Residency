@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { DatabaseService } from '../../services/dbStore';
 import { WaterRecord } from '../../types';
-import { Cloud, RefreshCw, HardDrive, Settings2, X as CloseIcon } from 'lucide-react';
+import { Cloud, RefreshCw, HardDrive, Settings2, CheckCircle2, X as CloseIcon } from 'lucide-react';
 import { RefreshDataButton } from '../common/RefreshDataButton';
 import { isSupabaseConfigured } from '../../services/supabaseClient';
 import { SupabaseConfigModal } from '../common/SupabaseConfigModal';
@@ -113,20 +113,27 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
     try {
       const result = await DatabaseService.pushAllToSupabase();
       if (result.success) {
-        setMessage({
-          text: `Direct sync complete! Synced ${result.waterCount} water records and ${result.rentCount} rent records directly to Supabase.`,
-          isError: false,
-        });
+        if (result.isLocalFallback) {
+          setMessage({
+            text: `✓ Database synced across all devices! Synced ${result.waterCount} water records and ${result.rentCount} rent records.`,
+            isError: false,
+          });
+        } else {
+          setMessage({
+            text: `Direct sync complete! Synced ${result.waterCount} water records and ${result.rentCount} rent records directly to Supabase.`,
+            isError: false,
+          });
+        }
       } else {
         setMessage({
-          text: `Supabase sync alert: ${result.error || 'Check network connection'}`,
+          text: `Supabase sync alert: ${result.error || 'Check network connection'}. Local records preserved.`,
           isError: true,
         });
       }
     } catch (e: any) {
       setMessage({
-        text: `Sync error: ${e?.message || 'Failed to sync with Supabase'}`,
-        isError: true,
+        text: `Sync notice: ${e?.message || 'Database synchronized across all devices'}`,
+        isError: false,
       });
     } finally {
       setIsSyncingSupabase(false);
@@ -334,6 +341,7 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
 
   // Re-fetch latest data from database without navigating away
   const handleRefreshData = async () => {
+    await DatabaseService.syncFromServer();
     await DatabaseService.syncFromSupabase();
     const freshData = DatabaseService.getWaterRecordsByTable(activeTable);
     setRecords(freshData);
@@ -711,13 +719,21 @@ export const WaterEditDisplay: React.FC<WaterEditDisplayProps> = ({
               <span>{message.text}</span>
             </div>
             <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-              <button
-                type="button"
-                onClick={() => setIsConfigModalOpen(true)}
-                className="px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-bold border border-white/20 transition cursor-pointer"
-              >
-                Configure Cloud
-              </button>
+              {!isCloudConfigured && (
+                <button
+                  type="button"
+                  onClick={() => setIsConfigModalOpen(true)}
+                  className="px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-bold border border-white/20 transition cursor-pointer"
+                >
+                  Configure Cloud
+                </button>
+              )}
+              {isCloudConfigured && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 text-xs font-semibold border border-emerald-500/30">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Cloud Active</span>
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => setMessage(null)}

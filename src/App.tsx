@@ -109,10 +109,26 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Sync with Supabase & background session check
+  // Sync with Server & Supabase & background session check
   useEffect(() => {
+    DatabaseService.syncFromServer();
     DatabaseService.syncFromSupabase();
     const unsubscribe = initializeSupabaseRealtime();
+
+    // Re-sync when switching between phone and laptop (screen on / tab focus)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        DatabaseService.syncFromServer();
+        DatabaseService.syncFromSupabase();
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+
+    // Periodic background sync across devices (every 8 seconds)
+    const syncInterval = setInterval(() => {
+      DatabaseService.syncFromServer();
+    }, 8000);
 
     SessionRouter.restoreSession().then((session) => {
       if (session) {
@@ -125,6 +141,9 @@ export default function App() {
 
     return () => {
       unsubscribe();
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+      clearInterval(syncInterval);
     };
   }, []);
 

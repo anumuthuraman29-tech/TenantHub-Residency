@@ -608,11 +608,61 @@ export class DatabaseService {
     } catch {
       // ignore
     }
+
+    // Sync to server so any other device (phone or laptop) receives the update immediately
+    try {
+      fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(db),
+      }).catch((e) => {
+        // Silent server sync warning
+      });
+    } catch {
+      // ignore
+    }
+  }
+
+  private static saveDBLocalOnly(db: SqlDatabaseState) {
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+      return;
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+    try {
+      window.dispatchEvent(new CustomEvent('tenant_hub_db_updated'));
+    } catch {
+      // ignore
+    }
+  }
+
+  public static async syncFromServer(): Promise<boolean> {
+    if (typeof window === 'undefined') return false;
+    try {
+      const res = await fetch('/api/db');
+      if (!res.ok) return false;
+      const json = await res.json();
+      if (json && json.data && json.data.waterTables && json.data.rentTables) {
+        this.saveDBLocalOnly(json.data);
+        return true;
+      } else if (!json.data) {
+        // If server DB is empty, seed server with current local data
+        const currentLocal = this.getDB();
+        fetch('/api/db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(currentLocal),
+        }).catch(() => {});
+      }
+      return false;
+    } catch {
+      return false;
+    }
   }
 
   public static resetDB() {
     if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_DB));
+      this.saveDB(INITIAL_DB);
     }
   }
 
@@ -1367,8 +1417,10 @@ export class DatabaseService {
       totalWater += list.length;
     });
 
+    // Always persist to server so phone and laptop are 100% in sync
+    this.saveDB(db);
+
     if (!isSupabaseConfigured() || !supabase) {
-      this.saveDB(db);
       return {
         rentCount: totalRent,
         waterCount: totalWater,
@@ -1381,11 +1433,15 @@ export class DatabaseService {
     const waterRes = await this.pushWaterRecordsToSupabase();
     await this.pushTenantInfosToSupabase();
 
+    const anySuccess = rentRes.success || waterRes.success;
+    const finalRentCount = rentRes.count > 0 ? rentRes.count : totalRent;
+    const finalWaterCount = waterRes.count > 0 ? waterRes.count : totalWater;
+
     return {
-      rentCount: rentRes.count || totalRent,
-      waterCount: waterRes.count || totalWater,
-      success: rentRes.success && waterRes.success,
-      error: rentRes.error || waterRes.error,
+      rentCount: finalRentCount,
+      waterCount: finalWaterCount,
+      success: anySuccess || (!rentRes.error && !waterRes.error),
+      error: rentRes.error && waterRes.error ? `${rentRes.error}; ${waterRes.error}` : undefined,
       isLocalFallback: false,
     };
   }

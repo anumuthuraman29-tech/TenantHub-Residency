@@ -50,6 +50,23 @@ function createSupabaseInstance(url: string, key: string): SupabaseClient | null
 
 export let supabase: SupabaseClient | null = createSupabaseInstance(currentUrl, currentAnonKey);
 
+// Fetch shared server config on initialization (syncs laptop & phone automatically)
+if (typeof window !== 'undefined') {
+  fetch('/api/config/supabase')
+    .then((res) => (res.ok ? res.json() : null))
+    .then((data) => {
+      if (data && data.url && data.anonKey) {
+        if (data.url !== currentUrl || data.anonKey !== currentAnonKey) {
+          console.log('[SupabaseClient] Loaded shared cloud config from server');
+          setSupabaseConfig(data.url, data.anonKey, false);
+        }
+      }
+    })
+    .catch(() => {
+      // Offline or local mode fallback
+    });
+}
+
 if (!supabase) {
   console.warn('Supabase URL or Anon Key is not configured. Running in local cache mode.');
 }
@@ -66,7 +83,11 @@ export const getSupabaseConfig = () => {
   };
 };
 
-export const setSupabaseConfig = (url: string, key: string): { success: boolean; error?: string } => {
+export const setSupabaseConfig = (
+  url: string,
+  key: string,
+  syncToServer: boolean = true
+): { success: boolean; error?: string } => {
   const cleanUrl = url.trim().replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
   const cleanKey = key.trim();
 
@@ -99,6 +120,14 @@ export const setSupabaseConfig = (url: string, key: string): { success: boolean;
       );
     }
 
+    if (syncToServer && typeof window !== 'undefined') {
+      fetch('/api/config/supabase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: cleanUrl, anonKey: cleanKey }),
+      }).catch((e) => console.warn('Could not sync config to server:', e));
+    }
+
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Invalid Supabase credentials.' };
@@ -120,6 +149,12 @@ export const clearSupabaseConfig = () => {
         detail: { isConfigured: false, url: '' },
       })
     );
+
+    fetch('/api/config/supabase', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: '', anonKey: '' }),
+    }).catch((e) => console.warn('Could not clear config on server:', e));
   }
 };
 
